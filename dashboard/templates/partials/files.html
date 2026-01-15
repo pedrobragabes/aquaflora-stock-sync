@@ -1,0 +1,24 @@
+{% if input_files %}
+<ul class="file-list">
+    {% for file in input_files %}
+    <li class="file-item">
+        <span class="file-icon">📄</span>
+        <div class="file-info">
+            <span class="file-name">{{ file.name }}</span>
+            <span class="file-meta">{{ file.modified }} • {{ (file.size / 1024) | round(1) }} KB</span>
+        </div>
+        <button class="btn btn-sm btn-primary" hx-post="/api/sync/run"
+            hx-vals='{"filename": "{{ file.name }}", "lite_mode": true, "allow_create": false}' hx-target="#sync-result"
+            hx-indicator="#loading">
+            ▶️
+        </button>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">
+    <span class="empty-icon">📭</span>
+    <p>Nenhum arquivo CSV encontrado</p>
+    <small>Faça upload de um arquivo ou coloque na pasta data/input/</small>
+</div>
+{% endif %}

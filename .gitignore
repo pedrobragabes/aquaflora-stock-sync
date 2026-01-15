@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Project specific
+.env
+*.db
+products.db
+last_run_stats.json
+
+# Logs - ignore all except .gitkeep
+logs/*
+!logs/.gitkeep
+*.log
+
+# Data folders - ignore CSVs but keep directory structure
+data/output/*
+!data/output/.gitkeep
+data/input/*
+!data/input/.gitkeep
+
+# Credentials (NEVER commit!)
+*.pem
+*.key
+*credentials*
+*secret*
+
+# Temporary
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Distribution
+MANIFEST
+
+# Gemini/AI agent artifacts
+.gemini/
+
+# Additional Python
+.mypy_cache/
+.ruff_cache/
+.pytype/

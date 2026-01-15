@@ -1,0 +1,85 @@
+# AquaFlora Stock Sync - Docker Compose
+# Production-ready configuration for Proxmox deployment
+
+services:
+  # Web Dashboard (FastAPI)
+  dashboard:
+    build: .
+    container_name: aquaflora-dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist database and data
+      - ./products.db:/app/products.db
+      - ./logs:/app/logs
+      - ./data/input:/app/data/input
+      - ./data/output:/app/data/output
+      - ./last_run_stats.json:/app/last_run_stats.json
+    env_file:
+      - .env
+    environment:
+      - LOG_TO_STDOUT=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - aquaflora-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Discord Bot (separate service for isolation)
+  bot:
+    build: .
+    container_name: aquaflora-discord-bot
+    command: ["python", "bot_control.py"]
+    volumes:
+      - ./products.db:/app/products.db
+      - ./logs:/app/logs
+      - ./data/input:/app/data/input
+      - ./last_run_stats.json:/app/last_run_stats.json
+    env_file:
+      - .env
+    environment:
+      - LOG_TO_STDOUT=true
+    restart: unless-stopped
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    networks:
+      - aquaflora-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =========================================================================
+  # OPTIONAL: Redis for caching (uncomment when needed)
+  # =========================================================================
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: aquaflora-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - aquaflora-net
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+
+networks:
+  aquaflora-net:
+    driver: bridge
+
+# volumes:
+#   redis-data:

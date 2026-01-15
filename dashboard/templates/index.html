@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - AquaFlora Stock Sync{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Header com ações rápidas -->
+    <header class="dashboard-header">
+        <h1>📦 Painel de Controle</h1>
+        <div class="quick-actions">
+            <button class="btn btn-primary btn-lg" hx-post="/api/sync/run"
+                hx-vals='{"filename": "{{ input_files[0].name if input_files else '' }}", "lite_mode": true, "allow_create": false}'
+                hx-target="#sync-result" hx-indicator="#loading" {% if not input_files %}disabled{% endif %}>
+                🚀 Sincronizar Agora
+            </button>
+            <button class="btn btn-secondary" hx-post="/api/map-site" hx-target="#sync-result" hx-indicator="#loading">
+                🗺️ Mapear Site
+            </button>
+        </div>
+    </header>
+
+    <!-- Indicador de loading -->
+    <div id="loading" class="htmx-indicator">
+        <div class="spinner"></div>
+        <span>Processando...</span>
+    </div>
+
+    <!-- Resultado do sync -->
+    <div id="sync-result"></div>
+
+    <!-- Cards de métricas -->
+    <section class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-icon">📊</div>
+            <div class="metric-value">{{ stats.total_products | default(0) }}</div>
+            <div class="metric-label">Produtos no DB</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">🛡️</div>
+            <div class="metric-value">{{ stats.whitelist_count | default(0) }}</div>
+            <div class="metric-label">Whitelist (Site)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon">🔄</div>
+            <div class="metric-value">{{ last_run.total_synced | default(0) if last_run else 0 }}</div>
+            <div class="metric-label">Última Sync</div>
+        </div>
+        <div class="metric-card {% if last_run and last_run.price_warnings %}warning{% endif %}">
+            <div class="metric-icon">🛡️</div>
+            <div class="metric-value">{{ last_run.price_warnings | length if last_run else 0 }}</div>
+            <div class="metric-label">Bloqueados</div>
+        </div>
+    </section>
+
+    <!-- Duas colunas: Arquivos e Alterações -->
+    <div class="two-columns">
+        <!-- Coluna: Arquivos CSV -->
+        <section class="card">
+            <div class="card-header">
+                <h2>📁 Arquivos de Entrada</h2>
+                <button class="btn btn-sm" onclick="document.getElementById('file-upload').click()">
+                    📤 Upload
+                </button>
+                <input type="file" id="file-upload" accept=".csv" style="display: none;" hx-post="/api/sync/upload"
+                    hx-encoding="multipart/form-data" hx-target="#sync-result" hx-trigger="change">
+            </div>
+            <div class="card-body" id="file-list" hx-get="/partials/files" hx-trigger="load, every 30s">
+                {% include "partials/files.html" %}
+            </div>
+        </section>
+
+        <!-- Coluna: Últimas Alterações -->
+        <section class="card">
+            <div class="card-header">
+                <h2>📋 Últimas Alterações</h2>
+            </div>
+            <div class="card-body" id="products-list" hx-get="/partials/products" hx-trigger="load, every 10s">
+                {% include "partials/products.html" %}
+            </div>
+        </section>
+    </div>
+
+    <!-- Controles Avançados -->
+    <section class="card">
+        <div class="card-header">
+            <h2>⚙️ Controles de Sync</h2>
+        </div>
+        <div class="card-body controls-form">
+            <form hx-post="/api/sync/run" hx-target="#sync-result" hx-indicator="#loading">
+                <div class="form-group">
+                    <label for="filename">Arquivo CSV:</label>
+                    <select name="filename" id="filename" class="form-control">
+                        {% for file in input_files %}
+                        <option value="{{ file.name }}">{{ file.name }} ({{ file.modified }})</option>
+                        {% else %}
+                        <option disabled>Nenhum arquivo encontrado</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="lite_mode" value="true" checked>
+                            <span>🚀 Modo LITE</span>
+                            <small>Só preço/estoque</small>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="allow_create" value="true">
+                            <span>➕ Criar Novos</span>
+                            <small>Permitir criação</small>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block" {% if not input_files %}disabled{% endif %}>
+                    ▶️ Executar Sincronização
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Agendamento -->
+    <section class="card">
+        <div class="card-header">
+            <h2>⏰ Agendamento Automático</h2>
+        </div>
+        <div class="card-body">
+            <form hx-post="/api/schedule" hx-target="#sync-result">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="enabled" value="true" {% if state.scheduler_enabled %}checked{%
+                                endif %}>
+                            <span>Ativar sync automático</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="time">Horário:</label>
+                        <input type="time" name="time" id="time" value="{{ state.scheduled_time }}"
+                            class="form-control">
+                    </div>
+                    <button type="submit" class="btn btn-secondary">💾 Salvar</button>
+                </div>
+            </form>
+        </div>
+    </section>
+</div>
+{% endblock %}

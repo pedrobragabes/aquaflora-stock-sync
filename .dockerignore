@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Data (mounted as volumes at runtime)
+*.db
+products.db
+data/input/*
+data/output/*
+logs/*
+last_run_stats.json
+
+# Environment (injected at runtime)
+.env
+
+# Docker files (not needed inside container)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation (optional, saves ~10KB)
+DEPLOY.md
+CHANGELOG.md
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

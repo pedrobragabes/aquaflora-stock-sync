@@ -1,0 +1,18 @@
+{% if state.is_syncing %}
+<span class="status-badge syncing">
+    <span class="pulse"></span>
+    {{ state.sync_status }}
+</span>
+{% elif state.sync_status == "Idle" %}
+<span class="status-badge idle">
+    🟢 Online
+</span>
+{% elif "✅" in state.sync_status %}
+<span class="status-badge success">
+    ✅ {{ state.sync_status }}
+</span>
+{% else %}
+<span class="status-badge error">
+    ❌ {{ state.sync_status }}
+</span>
+{% endif %}

@@ -1,0 +1,81 @@
+{
+    "version": "1.0",
+    "description": "AquaFlora Stock Sync - Known Brands Database",
+    "last_updated": "2026-01-15",
+    "brands": {
+        "pet_racoes_premium": {
+            "royal canin": "Royal Canin",
+            "royalcanin": "Royal Canin",
+            "premier": "Premier",
+            "premier pet": "Premier Pet",
+            "golden": "Golden",
+            "golden formula": "Golden Formula",
+            "farmina": "Farmina",
+            "farmina n&d": "Farmina N&D",
+            "origen": "Origen",
+            "acana": "Acana",
+            "taste of the wild": "Taste of the Wild",
+            "hills": "Hill's",
+            "purina": "Purina",
+            "proplan": "Pro Plan",
+            "pro plan": "Pro Plan"
+        },
+        "pet_racoes_populares": {
+            "pedigree": "Pedigree",
+            "whiskas": "Whiskas",
+            "friskies": "Friskies",
+            "dog chow": "Dog Chow",
+            "cat chow": "Cat Chow",
+            "special dog": "Special Dog",
+            "special cat": "Special Cat",
+            "luck dog": "Luck Dog",
+            "luck cat": "Luck Cat",
+            "max": "Max",
+            "max cat": "Max Cat",
+            "max dog": "Max Dog",
+            "total": "Total",
+            "guabi": "Guabi",
+            "guabi natural": "Guabi Natural",
+            "equilibrio": "Equilíbrio",
+            "naturalis": "Naturalis"
+        },
+        "veterinaria": {
+            "nexgard": "NexGard",
+            "bravecto": "Bravecto",
+            "simparic": "Simparic",
+            "revolution": "Revolution",
+            "advocate": "Advocate",
+            "frontline": "Frontline",
+            "seresto": "Seresto",
+            "heartgard": "Heartgard",
+            "drontal": "Drontal",
+            "zoetis": "Zoetis",
+            "virbac": "Virbac",
+            "agener": "Agener",
+            "ceva": "Ceva",
+            "merial": "Merial"
+        },
+        "higiene_pet": {
+            "sanol": "Sanol",
+            "genial": "Genial Pet",
+            "procao": "ProCão",
+            "keldog": "Keldog",
+            "petbrilho": "PetBrilho"
+        },
+        "aquarismo": {
+            "tetra": "Tetra",
+            "sera": "Sera",
+            "jbl": "JBL",
+            "prodac": "Prodac",
+            "alcon": "Alcon",
+            "nutricon": "Nutricon"
+        },
+        "pesca": {
+            "shimano": "Shimano",
+            "daiwa": "Daiwa",
+            "marine sports": "Marine Sports",
+            "maruri": "Maruri"
+        }
+    },
+    "_instructions": "To add a new brand: edit the appropriate category and add 'key_lowercase': 'Display Name'"
+}

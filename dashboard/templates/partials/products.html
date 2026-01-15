@@ -1,0 +1,34 @@
+{% if products %}
+<ul class="product-list">
+    {% for p in products %}
+    <li class="product-item">
+        <span class="product-emoji">
+            {% if p.change_type == 'new' %}🆕
+            {% elif p.price_variation > 0 %}📈
+            {% elif p.price_variation < 0 %}📉 {% else %}➖{% endif %} </span>
+                <div class="product-info">
+                    <span class="product-sku">{{ p.sku }}</span>
+                    <span class="product-name">{{ p.name[:40] }}{% if p.name|length > 40 %}...{% endif %}</span>
+                </div>
+                <div class="product-price">
+                    {% if p.old_price %}
+                    <span class="old-price">R$ {{ "%.2f" | format(p.old_price) }}</span>
+                    <span class="arrow">→</span>
+                    {% endif %}
+                    <span class="new-price">R$ {{ "%.2f" | format(p.new_price) }}</span>
+                    {% if p.price_variation != 0 %}
+                    <span class="variation {% if p.price_variation > 0 %}up{% else %}down{% endif %}">
+                        {{ "%+.1f" | format(p.price_variation) }}%
+                    </span>
+                    {% endif %}
+                </div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">
+    <span class="empty-icon">📋</span>
+    <p>Nenhuma alteração registrada</p>
+    <small>Execute uma sincronização para ver as mudanças</small>
+</div>
+{% endif %}
