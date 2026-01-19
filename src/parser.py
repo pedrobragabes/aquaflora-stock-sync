@@ -115,8 +115,8 @@ class AthosParser:
                     continue
                 
                 # Column mapping for clean CSV:
-                # 0: Codigo (SKU)
-                # 1: CodigoBarras (EAN)
+                # 0: Codigo (Internal code - NOT the SKU!)
+                # 1: CodigoBarras (EAN/Barcode - THIS is the SKU for WooCommerce)
                 # 2: Descricao (Name)
                 # 3: Unidade
                 # 4: Custo
@@ -128,8 +128,8 @@ class AthosParser:
                 # 10: MarcaCod
                 # 11: Marca
                 
-                sku = cols[0].strip()
-                ean = cols[1].strip() if len(cols) > 1 else ""
+                codigo_interno = cols[0].strip()  # Internal Athos code
+                ean = cols[1].strip() if len(cols) > 1 else ""  # This is the real SKU!
                 name = cols[2].strip() if len(cols) > 2 else ""
                 cost = cols[4].strip() if len(cols) > 4 else "0"
                 price = cols[5].strip() if len(cols) > 5 else "0"
@@ -137,19 +137,22 @@ class AthosParser:
                 department = cols[9].strip() if len(cols) > 9 else "SEM_CATEGORIA"
                 brand = cols[11].strip() if len(cols) > 11 else ""
                 
-                # Skip if no valid SKU
+                # SKU = CodigoBarras (EAN), not the internal Athos code!
+                sku = ean
+                
+                # Skip if no valid SKU (EAN)
                 if not sku or not any(c.isdigit() for c in sku):
                     continue
                 
                 product = RawProduct(
-                    sku=sku,
+                    sku=sku,  # EAN/Barcode
                     name=name,
                     stock=stock,
                     minimum="0",
                     price=price,
                     cost=cost,
                     department=department,
-                    ean=ean,
+                    ean=ean,  # Same as SKU for reference
                     brand=brand,
                 )
                 products.append(product)
