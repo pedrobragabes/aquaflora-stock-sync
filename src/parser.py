@@ -57,6 +57,10 @@ class AthosParser:
         """
         Parse an Athos ERP export file and return list of raw products.
         
+        Supports two formats:
+        1. Clean CSV (semicolon-separated): Modern export format
+        2. Dirty report format: Legacy format with "Valor Custo" markers
+        
         Args:
             filepath: Path to the CSV/text file
             
@@ -76,6 +80,92 @@ class AthosParser:
         except Exception as e:
             raise ParserError(f"Failed to read file: {e}", filename=str(filepath))
         
+        # Detect format by checking first line
+        first_line = content.split('\n')[0] if content else ""
+        
+        if "Codigo;CodigoBarras;Descricao" in first_line or ";Descricao;" in first_line:
+            # New clean CSV format with semicolon separator
+            logger.info("📋 Detected clean CSV format (semicolon-separated)")
+            return self._parse_clean_csv(content, filepath)
+        else:
+            # Legacy dirty report format
+            logger.info("📋 Detected legacy report format")
+            return self._parse_legacy_format(content, filepath)
+    
+    def _parse_clean_csv(self, content: str, filepath: Path) -> List[RawProduct]:
+        """Parse the new clean CSV format with semicolon separator."""
+        products = []
+        errors = []
+        
+        lines = content.splitlines()
+        if not lines:
+            return []
+        
+        # Skip header row
+        header = lines[0]
+        logger.debug(f"CSV Header: {header}")
+        
+        for line_num, line in enumerate(lines[1:], 2):
+            if not line.strip():
+                continue
+            
+            try:
+                cols = line.split(';')
+                if len(cols) < 8:
+                    continue
+                
+                # Column mapping for clean CSV:
+                # 0: Codigo (SKU)
+                # 1: CodigoBarras (EAN)
+                # 2: Descricao (Name)
+                # 3: Unidade
+                # 4: Custo
+                # 5: Preco
+                # 6: Preco2
+                # 7: Estoque
+                # 8: DepartamentoCod
+                # 9: Departamento
+                # 10: MarcaCod
+                # 11: Marca
+                
+                sku = cols[0].strip()
+                ean = cols[1].strip() if len(cols) > 1 else ""
+                name = cols[2].strip() if len(cols) > 2 else ""
+                cost = cols[4].strip() if len(cols) > 4 else "0"
+                price = cols[5].strip() if len(cols) > 5 else "0"
+                stock = cols[7].strip() if len(cols) > 7 else "0"
+                department = cols[9].strip() if len(cols) > 9 else "SEM_CATEGORIA"
+                brand = cols[11].strip() if len(cols) > 11 else ""
+                
+                # Skip if no valid SKU
+                if not sku or not any(c.isdigit() for c in sku):
+                    continue
+                
+                product = RawProduct(
+                    sku=sku,
+                    name=name,
+                    stock=stock,
+                    minimum="0",
+                    price=price,
+                    cost=cost,
+                    department=department,
+                    ean=ean,
+                    brand=brand,
+                )
+                products.append(product)
+                
+            except Exception as e:
+                errors.append(f"Line {line_num}: {e}")
+                logger.debug(f"Line {line_num}: Parse error - {e}")
+        
+        logger.info(f"✅ Parsed {len(products)} products from {filepath.name}")
+        if errors:
+            logger.warning(f"⚠️ {len(errors)} lines had parse errors")
+        
+        return products
+    
+    def _parse_legacy_format(self, content: str, filepath: Path) -> List[RawProduct]:
+        """Parse the legacy dirty report format."""
         # Parse each line
         products = []
         errors = []
@@ -228,21 +318,49 @@ class AthosParser:
 
 def parse_brazilian_number(value: str) -> float:
     """
-    Convert Brazilian number format to float.
+    Convert number to float, auto-detecting format:
+    - Brazilian: 1.234,56 (dot=thousand, comma=decimal)
+    - American:  1,234.56 (comma=thousand, dot=decimal)
+    - Simple:    1234.56 or 1234,56
     
     Examples:
         "1.234,56" -> 1234.56
+        "1,234.56" -> 1234.56
         "100,00" -> 100.0
+        "1000.50" -> 1000.5
         "1000" -> 1000.0
     """
-    if not value or value.strip() == "":
+    if not value or (isinstance(value, str) and value.strip() == ""):
         return 0.0
     
     if isinstance(value, (int, float)):
         return float(value)
     
-    # Remove thousand separators (.) and convert decimal comma
-    cleaned = str(value).strip().replace(".", "").replace(",", ".")
+    s = str(value).strip()
+    
+    # Check for both separators
+    has_dot = '.' in s
+    has_comma = ',' in s
+    
+    if has_dot and has_comma:
+        # Both separators present - check which comes last (that's the decimal)
+        dot_pos = s.rfind('.')
+        comma_pos = s.rfind(',')
+        
+        if comma_pos > dot_pos:
+            # Brazilian format: 1.234,56 (comma is decimal)
+            cleaned = s.replace(".", "").replace(",", ".")
+        else:
+            # American format: 1,234.56 (dot is decimal)
+            cleaned = s.replace(",", "")
+    elif has_comma:
+        # Only comma - assume it's decimal (European/Brazilian style)
+        cleaned = s.replace(",", ".")
+    elif has_dot:
+        # Only dot - keep as-is (American format)
+        cleaned = s
+    else:
+        cleaned = s
     
     try:
         return float(cleaned)

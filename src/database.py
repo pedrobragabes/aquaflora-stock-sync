@@ -3,6 +3,7 @@ AquaFlora Stock Sync - Product Database
 SQLite handler for product sync state with dual hash tracking.
 """
 
+import json
 import logging
 import sqlite3
 from datetime import datetime
@@ -62,6 +63,23 @@ class ProductDatabase:
     CREATE INDEX IF NOT EXISTS idx_price_history_date ON price_history(recorded_at);
     """
     
+    # Product images table for image curation
+    PRODUCT_IMAGES_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS product_images (
+        sku TEXT PRIMARY KEY,
+        image_url TEXT,
+        thumbnail_urls TEXT,
+        status TEXT DEFAULT 'pending',
+        source TEXT,
+        curated_at TEXT,
+        uploaded_at TEXT
+    )
+    """
+    
+    PRODUCT_IMAGES_INDEX = """
+    CREATE INDEX IF NOT EXISTS idx_product_images_status ON product_images(status);
+    """
+    
     # Migration for existing databases without exists_on_site column
     MIGRATION_ADD_EXISTS = """
     ALTER TABLE products ADD COLUMN exists_on_site INTEGER DEFAULT 0;
@@ -86,6 +104,7 @@ class ProductDatabase:
         cursor = self.conn.cursor()
         cursor.execute(self.TABLE_SCHEMA)
         cursor.execute(self.PRICE_HISTORY_SCHEMA)
+        cursor.execute(self.PRODUCT_IMAGES_SCHEMA)
         self.conn.commit()
     
     def _run_migrations(self):
@@ -366,6 +385,163 @@ class ProductDatabase:
             LEFT JOIN products p ON ph.sku = p.sku
             WHERE ph.variation_percent != 0
             ORDER BY ph.recorded_at DESC
+            LIMIT ?
+            """,
+            (limit,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    
+    # =========================================================================
+    # PRODUCT IMAGES METHODS (for image curation)
+    # =========================================================================
+    
+    def get_pending_images(self, limit: int = 50) -> List[Dict]:
+        """
+        Get products without curated images.
+        Returns products from main table that don't have a curated image.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT p.sku, p.woo_id
+            FROM products p
+            LEFT JOIN product_images pi ON p.sku = pi.sku
+            WHERE pi.sku IS NULL OR pi.status = 'pending'
+            ORDER BY p.last_sync DESC
+            LIMIT ?
+            """,
+            (limit,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_pending_images_count(self) -> int:
+        """Get count of products without curated images."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*) as count
+            FROM products p
+            LEFT JOIN product_images pi ON p.sku = pi.sku
+            WHERE pi.sku IS NULL OR pi.status = 'pending'
+            """
+        )
+        return cursor.fetchone()['count']
+    
+    def save_image_selection(
+        self,
+        sku: str,
+        image_url: str,
+        thumbnail_urls: Optional[List[str]] = None,
+        source: str = "duckduckgo"
+    ):
+        """Save image selection for a product."""
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        thumbnails_json = json.dumps(thumbnail_urls) if thumbnail_urls else None
+        
+        cursor.execute(
+            """
+            INSERT INTO product_images (sku, image_url, thumbnail_urls, status, source, curated_at)
+            VALUES (?, ?, ?, 'curated', ?, ?)
+            ON CONFLICT(sku) DO UPDATE SET
+                image_url = ?,
+                thumbnail_urls = ?,
+                status = 'curated',
+                source = ?,
+                curated_at = ?
+            """,
+            (sku, image_url, thumbnails_json, source, now,
+             image_url, thumbnails_json, source, now)
+        )
+        self.conn.commit()
+        logger.info(f"Saved image selection for SKU {sku}")
+    
+    def get_image_status(self, sku: str) -> Optional[Dict]:
+        """Get image status for a SKU."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM product_images WHERE sku = ?",
+            (sku,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        
+        result = dict(row)
+        if result.get('thumbnail_urls'):
+            result['thumbnail_urls'] = json.loads(result['thumbnail_urls'])
+        return result
+    
+    def apply_image_to_family(self, source_sku: str, prefix_length: int = 7) -> int:
+        """
+        Apply image from source SKU to all SKUs with same prefix.
+        Returns count of affected products.
+        """
+        # Get the source image
+        source_image = self.get_image_status(source_sku)
+        if not source_image or not source_image.get('image_url'):
+            return 0
+        
+        prefix = source_sku[:prefix_length]
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        
+        # Find all products with same prefix that don't have curated images
+        cursor.execute(
+            """
+            SELECT p.sku FROM products p
+            LEFT JOIN product_images pi ON p.sku = pi.sku
+            WHERE p.sku LIKE ? || '%'
+            AND p.sku != ?
+            AND (pi.sku IS NULL OR pi.status = 'pending')
+            """,
+            (prefix, source_sku)
+        )
+        
+        family_skus = [row['sku'] for row in cursor.fetchall()]
+        
+        for family_sku in family_skus:
+            cursor.execute(
+                """
+                INSERT INTO product_images (sku, image_url, status, source, curated_at)
+                VALUES (?, ?, 'curated', 'family', ?)
+                ON CONFLICT(sku) DO UPDATE SET
+                    image_url = ?,
+                    status = 'curated',
+                    source = 'family',
+                    curated_at = ?
+                """,
+                (family_sku, source_image['image_url'], now,
+                 source_image['image_url'], now)
+            )
+        
+        self.conn.commit()
+        logger.info(f"Applied image from {source_sku} to {len(family_skus)} family products")
+        return len(family_skus)
+    
+    def mark_image_uploaded(self, sku: str):
+        """Mark image as uploaded to WooCommerce."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE product_images
+            SET status = 'uploaded', uploaded_at = ?
+            WHERE sku = ?
+            """,
+            (datetime.now().isoformat(), sku)
+        )
+        self.conn.commit()
+    
+    def get_curated_images(self, limit: int = 50) -> List[Dict]:
+        """Get products with curated but not uploaded images."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT pi.*, p.woo_id
+            FROM product_images pi
+            JOIN products p ON pi.sku = p.sku
+            WHERE pi.status = 'curated'
+            ORDER BY pi.curated_at DESC
             LIMIT ?
             """,
             (limit,)

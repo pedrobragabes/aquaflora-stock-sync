@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Curadoria de Imagens - AquaFlora Stock Sync{% endblock %}
+
+{% block content %}
+<div class="dashboard images-page">
+    <!-- Header -->
+    <header class="dashboard-header">
+        <h1>📸 Curadoria de Imagens</h1>
+        <div class="quick-actions">
+            <span class="stats-badge">
+                <strong>{{ stats.pending_count | default(0) }}</strong> pendentes
+            </span>
+            <span class="stats-badge success">
+                <strong>{{ stats.curated_count | default(0) }}</strong> curadas
+            </span>
+        </div>
+    </header>
+
+    <!-- Indicador de loading -->
+    <div id="loading" class="htmx-indicator">
+        <div class="spinner"></div>
+        <span>Buscando imagens...</span>
+    </div>
+
+    <!-- Resultado de ações -->
+    <div id="action-result"></div>
+
+    <!-- Layout principal: sidebar + main -->
+    <div class="images-layout">
+        <!-- Sidebar: Lista de produtos pendentes -->
+        <aside class="images-sidebar card">
+            <div class="card-header">
+                <h2>📋 Pendentes</h2>
+                <button class="btn btn-sm" hx-get="/partials/pending-list" hx-target="#pending-list">
+                    🔄
+                </button>
+            </div>
+            <div class="card-body" id="pending-list" hx-get="/partials/pending-list" hx-trigger="load">
+                <!-- Lista carregada via HTMX -->
+                <div class="loading-placeholder">Carregando...</div>
+            </div>
+        </aside>
+
+        <!-- Main: Grid de candidatos -->
+        <main class="images-main card">
+            <div class="card-header">
+                <h2 id="current-product-title">Selecione um produto</h2>
+                <div class="product-actions" id="product-actions" style="display: none;">
+                    <button class="btn btn-sm" id="skip-btn" onclick="skipProduct()">
+                        ⏭️ Pular
+                    </button>
+                    <button class="btn btn-sm btn-secondary" id="family-btn" onclick="applyToFamily()">
+                        👨‍👩‍👧‍👦 Aplicar p/ Família
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="image-candidates" class="image-grid">
+                    <div class="empty-state">
+                        <p>👆 Selecione um produto na lista à esquerda</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+    let currentSku = null;
+    let currentProductName = null;
+
+    function selectProduct(sku, productName) {
+        currentSku = sku;
+        currentProductName = productName;
+
+        // Update title
+        document.getElementById('current-product-title').textContent =
+            `SKU: ${sku}`;
+
+        // Show actions
+        document.getElementById('product-actions').style.display = 'flex';
+
+        // Highlight selected item
+        document.querySelectorAll('.pending-item').forEach(el => {
+            el.classList.remove('active');
+        });
+        document.querySelector(`[data-sku="${sku}"]`)?.classList.add('active');
+
+        // Load candidates
+        htmx.ajax('GET', `/api/images/search/${sku}`, {
+            target: '#image-candidates',
+            indicator: '#loading'
+        });
+    }
+
+    function selectImage(imageUrl) {
+        if (!currentSku) return;
+
+        // Send selection
+        fetch('/api/images/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `sku=${encodeURIComponent(currentSku)}&image_url=${encodeURIComponent(imageUrl)}`
+        })
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('action-result').innerHTML = html;
+                // Refresh pending list
+                htmx.ajax('GET', '/partials/pending-list', { target: '#pending-list' });
+                // Clear current selection
+                document.getElementById('image-candidates').innerHTML =
+                    '<div class="empty-state"><p>✅ Imagem salva! Selecione outro produto.</p></div>';
+                document.getElementById('product-actions').style.display = 'none';
+                currentSku = null;
+            });
+    }
+
+    function skipProduct() {
+        if (!currentSku) return;
+
+        // Just move to next without saving
+        document.getElementById('image-candidates').innerHTML =
+            '<div class="empty-state"><p>⏭️ Produto pulado. Selecione outro.</p></div>';
+        document.getElementById('product-actions').style.display = 'none';
+        currentSku = null;
+    }
+
+    function applyToFamily() {
+        if (!currentSku) return;
+
+        fetch('/api/images/apply-family', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `sku=${encodeURIComponent(currentSku)}`
+        })
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('action-result').innerHTML = html;
+                // Refresh pending list
+                htmx.ajax('GET', '/partials/pending-list', { target: '#pending-list' });
+            });
+    }
+</script>
+
+<style>
+    .images-page {
+        max-width: 1400px;
+    }
+
+    .images-layout {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .images-sidebar {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+    }
+
+    .images-sidebar .card-body {
+        padding: 0;
+    }
+
+    .pending-item {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .pending-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .pending-item.active {
+        background: rgba(16, 185, 129, 0.2);
+        border-left: 3px solid #10B981;
+    }
+
+    .pending-item .sku {
+        font-family: monospace;
+        font-weight: 600;
+        color: #10B981;
+    }
+
+    .pending-item .name {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.7);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .image-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 1rem;
+    }
+
+    .image-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .image-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .image-card img {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+    }
+
+    .image-card .meta {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 3rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .stats-badge {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+    }
+
+    .stats-badge.success {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10B981;
+    }
+
+    .product-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .images-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .images-sidebar {
+            max-height: 200px;
+        }
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,14 @@
+<!-- Pending products list partial -->
+{% if pending %}
+{% for product in pending %}
+<div class="pending-item" data-sku="{{ product.sku }}"
+    onclick="selectProduct('{{ product.sku }}', '{{ product.name | default(product.sku) | e }}')">
+    <div class="sku">{{ product.sku }}</div>
+    <div class="name">{{ product.name | default('Sem nome') | truncate(40) }}</div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state" style="padding: 1rem;">
+    <p>🎉 Nenhum produto pendente!</p>
+</div>
+{% endif %}

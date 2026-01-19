@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     dashboard_password: str = Field(default="")  # Empty = no auth required
     dashboard_auth_enabled: bool = Field(default=False)
     
+    # Backup
+    backup_enabled: bool = Field(default=False)
+    backup_rclone_remote: str = Field(default="gdrive:aquaflora-backup")
+    backup_retention_days: int = Field(default=7)
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -69,6 +74,11 @@ class Settings(BaseSettings):
     def discord_bot_configured(self) -> bool:
         """Check if Discord bot is configured."""
         return bool(self.discord_bot_token)
+    
+    @property
+    def backup_configured(self) -> bool:
+        """Check if backup is enabled and configured."""
+        return self.backup_enabled and bool(self.backup_rclone_remote)
 
 
 # Singleton instance

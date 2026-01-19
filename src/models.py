@@ -29,6 +29,8 @@ class RawProduct(BaseModel):
     price: float
     cost: float
     department: str
+    ean: Optional[str] = None  # CodigoBarras from CSV
+    brand: Optional[str] = None  # Marca from CSV
     
     @field_validator("sku", mode="before")
     @classmethod

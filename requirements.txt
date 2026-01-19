@@ -24,6 +24,10 @@ apscheduler>=3.10.0
 # Discord Bot
 py-cord>=2.4.0
 
+# Image Processing (Scraper)
+Pillow>=10.0.0
+duckduckgo-search>=6.0.0
+
 # Development and Testing
 pytest>=7.0.0
 pytest-asyncio>=0.21.0

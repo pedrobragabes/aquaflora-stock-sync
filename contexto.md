@@ -310,6 +310,7 @@ DISCORD_CHANNEL_ID=seu_channel_id
 | Documentação API | ✅ | `/docs` (Swagger) e `/redoc` |
 | Validação CSV | ✅ | ParserError com contexto de linha/arquivo |
 | Cache de marcas | ✅ | `config/brands.json` editável |
+| Backup para Cloud | ✅ | Via rclone (Google Drive, OneDrive, S3, etc) |
 
 ### ⏸️ Pendente
 

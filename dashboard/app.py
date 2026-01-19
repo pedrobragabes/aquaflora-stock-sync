@@ -28,6 +28,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.settings import settings
 from src.database import ProductDatabase
+from src.image_curator import ImageCurator
+from src.image_scraper import search_and_get_thumbnails
 
 logger = logging.getLogger(__name__)
 
@@ -319,6 +321,26 @@ async def dashboard_page(request: Request):
     })
 
 
+@app.get("/images", response_class=HTMLResponse)
+async def images_page(request: Request):
+    """Image curation page."""
+    try:
+        db = ProductDatabase(settings.db_path)
+        curator = ImageCurator(db)
+        stats = curator.get_stats()
+        curator.close()
+        db.close()
+    except Exception as e:
+        logger.error(f"Failed to get image stats: {e}")
+        stats = {"pending_count": 0, "curated_count": 0}
+    
+    return templates.TemplateResponse("images.html", {
+        "request": request,
+        "stats": stats,
+        "state": state,
+    })
+
+
 # =============================================================================
 # API ROUTES
 # =============================================================================
@@ -533,6 +555,149 @@ async def partial_products(request: Request):
         "request": request,
         "products": products,
     })
+
+
+# =============================================================================
+# IMAGE CURATION ROUTES
+# =============================================================================
+
+@app.get("/partials/pending-list", response_class=HTMLResponse)
+async def partial_pending_list(request: Request):
+    """HTMX partial for pending products list."""
+    try:
+        db = ProductDatabase(settings.db_path)
+        pending = db.get_pending_images(limit=50)
+        db.close()
+        
+        # Add product names from last run stats if available
+        last_run = get_last_run_stats()
+        product_names = {}
+        if last_run:
+            for change in last_run.get("product_changes", []):
+                if "sku" in change and "name" in change:
+                    product_names[change["sku"]] = change["name"]
+        
+        for p in pending:
+            p["name"] = product_names.get(p["sku"], p["sku"])
+        
+    except Exception as e:
+        logger.error(f"Failed to get pending images: {e}")
+        pending = []
+    
+    return templates.TemplateResponse("partials/pending_list.html", {
+        "request": request,
+        "pending": pending,
+    })
+
+
+@app.get("/api/images/search/{sku}", response_class=HTMLResponse)
+async def api_search_images(request: Request, sku: str):
+    """Search images for a product and return HTMX partial."""
+    try:
+        # Get product name from database or use SKU
+        db = ProductDatabase(settings.db_path)
+        record = db.get_record(sku)
+        db.close()
+        
+        # Use SKU as product name if no record found
+        product_name = sku
+        if record:
+            # Try to get name from last run
+            last_run = get_last_run_stats()
+            if last_run:
+                for change in last_run.get("product_changes", []):
+                    if change.get("sku") == sku:
+                        product_name = change.get("name", sku)
+                        break
+        
+        # Search for images
+        candidates = search_and_get_thumbnails(
+            product_name=product_name,
+            sku=sku,
+            max_results=6
+        )
+        
+    except Exception as e:
+        logger.error(f"Image search failed for SKU {sku}: {e}")
+        candidates = []
+    
+    return templates.TemplateResponse("partials/image_candidates.html", {
+        "request": request,
+        "candidates": candidates,
+    })
+
+
+@app.post("/api/images/select")
+async def api_select_image(
+    sku: str = Form(...),
+    image_url: str = Form(...),
+):
+    """Save selected image for a product."""
+    try:
+        db = ProductDatabase(settings.db_path)
+        curator = ImageCurator(db)
+        
+        success = curator.save_selection(
+            sku=sku,
+            image_url=image_url,
+            download=True
+        )
+        
+        curator.close()
+        db.close()
+        
+        if success:
+            return HTMLResponse(
+                '<div class="alert alert-success">✅ Imagem salva para ' + sku + '</div>'
+            )
+        else:
+            return HTMLResponse(
+                '<div class="alert alert-error">❌ Erro ao salvar imagem</div>'
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to save image for SKU {sku}: {e}")
+        return HTMLResponse(
+            '<div class="alert alert-error">❌ Erro: ' + str(e)[:50] + '</div>'
+        )
+
+
+@app.post("/api/images/apply-family")
+async def api_apply_family(sku: str = Form(...)):
+    """Apply image to product family (same prefix)."""
+    try:
+        db = ProductDatabase(settings.db_path)
+        curator = ImageCurator(db)
+        
+        count = curator.apply_to_family(sku)
+        
+        curator.close()
+        db.close()
+        
+        return HTMLResponse(
+            f'<div class="alert alert-success">👨‍👩‍👧‍👦 Imagem aplicada para {count} produtos da família</div>'
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to apply family for SKU {sku}: {e}")
+        return HTMLResponse(
+            '<div class="alert alert-error">❌ Erro: ' + str(e)[:50] + '</div>'
+        )
+
+
+@app.get("/api/images/stats")
+async def api_image_stats():
+    """Get image curation statistics."""
+    try:
+        db = ProductDatabase(settings.db_path)
+        curator = ImageCurator(db)
+        stats = curator.get_stats()
+        curator.close()
+        db.close()
+        return stats
+    except Exception as e:
+        logger.error(f"Failed to get image stats: {e}")
+        return {"pending_count": 0, "curated_count": 0, "uploaded_count": 0}
 
 
 # =============================================================================

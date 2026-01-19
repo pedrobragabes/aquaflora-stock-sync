@@ -1,0 +1,20 @@
+<!-- Image candidates grid partial -->
+{% if candidates %}
+{% for img in candidates %}
+<div class="image-card" onclick="selectImage('{{ img.url | e }}')">
+    <img src="{{ img.thumbnail }}" alt="{{ img.title | default('Imagem') | truncate(50) }}" loading="lazy"
+        onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22>Erro</text></svg>'">
+    <div class="meta">
+        {{ img.source }}
+        {% if img.width and img.height %}
+        • {{ img.width }}x{{ img.height }}
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    <p>😔 Nenhuma imagem encontrada</p>
+    <p>Tente um nome de produto diferente ou pule este item.</p>
+</div>
+{% endif %}

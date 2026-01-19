@@ -194,7 +194,25 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
     summary.to_json_file("last_run_stats.json")
     logger.debug("📊 Saved last_run_stats.json for bot commands")
     
-    # 8. Print final report
+    # 8. Run backup if enabled
+    if settings.backup_configured and summary.success:
+        from src.backup import run_backup
+        logger.info("☁️ Running backup to cloud storage...")
+        try:
+            backup_success = run_backup(
+                db_path=settings.db_path,
+                stats_path=Path("last_run_stats.json"),
+                rclone_remote=settings.backup_rclone_remote,
+                retention_days=settings.backup_retention_days,
+            )
+            if backup_success:
+                logger.info("✅ Backup completed")
+            else:
+                logger.warning("⚠️ Backup failed - check rclone configuration")
+        except Exception as e:
+            logger.error(f"❌ Backup error: {e}")
+    
+    # 9. Print final report
     print_report(summary)
     
     db.close()
