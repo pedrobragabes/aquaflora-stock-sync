@@ -58,11 +58,14 @@
         <section class="card">
             <div class="card-header">
                 <h2>📁 Arquivos de Entrada</h2>
-                <button class="btn btn-sm" onclick="document.getElementById('file-upload').click()">
-                    📤 Upload
-                </button>
-                <input type="file" id="file-upload" accept=".csv" style="display: none;" hx-post="/api/sync/upload"
-                    hx-encoding="multipart/form-data" hx-target="#sync-result" hx-trigger="change">
+                <form id="upload-form" hx-post="/api/sync/upload" hx-encoding="multipart/form-data"
+                    hx-target="#sync-result" hx-trigger="change from:#file-upload"
+                    hx-on::after-request="this.reset(); htmx.trigger('#file-list', 'load')">
+                    <input type="file" id="file-upload" name="file" accept=".csv" style="display: none;">
+                    <button type="button" class="btn btn-sm" onclick="document.getElementById('file-upload').click()">
+                        📤 Upload
+                    </button>
+                </form>
             </div>
             <div class="card-body" id="file-list" hx-get="/partials/files" hx-trigger="load, every 30s">
                 {% include "partials/files.html" %}
