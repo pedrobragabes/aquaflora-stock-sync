@@ -1,0 +1,273 @@
+{
+  "3a7fd8433af0ed02": {
+    "score": 0.09999999999999998,
+    "labels": [
+      "packaging and labeling",
+      "food",
+      "box",
+      "advertising",
+      "plastic",
+      "label",
+      "pet supply",
+      "produce"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "1ac207988c88bfcd": {
+    "score": 0.0,
+    "labels": [
+      "pest",
+      "rodent",
+      "advertising",
+      "rat",
+      "muroids",
+      "pet supply",
+      "murids"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "b8b6e32602aa7356": {
+    "score": 0.0,
+    "labels": [
+      "packaging and labeling",
+      "plastic",
+      "food",
+      "pest",
+      "box",
+      "label"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "4fe75968d5bfed29": {
+    "score": 0.09999999999999998,
+    "labels": [
+      "packaging and labeling",
+      "plastic",
+      "advertising",
+      "label",
+      "box",
+      "pet supply"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "5a48c823554acb23": {
+    "score": 0.0,
+    "labels": [],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "ea5572161b8dfe01": {
+    "score": 0.6,
+    "labels": [
+      "dog",
+      "dog food",
+      "pet food",
+      "pet supply",
+      "animal feed",
+      "carnivores",
+      "puppy",
+      "dog supply",
+      "toy dog",
+      "cat food",
+      "small animal food",
+      "pet vitamins & supplements",
+      "canidae"
+    ],
+    "is_product_image": true,
+    "safe_search_ok": true
+  },
+  "f6d3689f439fb818": {
+    "score": 0.09999999999999998,
+    "labels": [],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "3660a8339cbff3c7": {
+    "score": 0.09999999999999998,
+    "labels": [
+      "ingredient",
+      "food",
+      "packaging and labeling"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "c39c38b3aca10087": {
+    "score": 0.09999999999999998,
+    "labels": [
+      "food",
+      "mixture",
+      "produce"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "dfe339a17ae9edb2": {
+    "score": 0.15,
+    "labels": [
+      "plastic"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "d10ac7e9392ccdfa": {
+    "score": 0.44999999999999996,
+    "labels": [
+      "food",
+      "ingredient",
+      "meat",
+      "pet supply",
+      "produce",
+      "convenience food",
+      "nut",
+      "packaging and labeling",
+      "beef",
+      "natural foods",
+      "venison",
+      "frozen food"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "b37de2b4893eeb4d": {
+    "score": 0.09999999999999998,
+    "labels": [],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "4b37c16a90915566": {
+    "score": 0.7,
+    "labels": [
+      "dog food",
+      "pet food",
+      "pet supply",
+      "dog supply",
+      "animal feed",
+      "cat food",
+      "food",
+      "small animal food",
+      "pet vitamins & supplements",
+      "packaging and labeling",
+      "canidae"
+    ],
+    "is_product_image": true,
+    "safe_search_ok": true
+  },
+  "8ff26707e392525d": {
+    "score": 0.75,
+    "labels": [
+      "dog",
+      "dog food",
+      "pet supply",
+      "pet food",
+      "dog supply",
+      "puppy",
+      "bone",
+      "paw",
+      "canidae",
+      "pet vitamins & supplements",
+      "toy dog",
+      "herding dog"
+    ],
+    "is_product_image": true,
+    "safe_search_ok": true
+  },
+  "9f538574ac8d428e": {
+    "score": 0.6,
+    "labels": [
+      "ingredient",
+      "dog food",
+      "pet supply",
+      "food",
+      "pet food",
+      "dog supply",
+      "animal feed",
+      "puppy",
+      "packaging and labeling",
+      "meat",
+      "staple food",
+      "label",
+      "convenience food"
+    ],
+    "is_product_image": true,
+    "safe_search_ok": true
+  },
+  "f05d5b0b90366cad": {
+    "score": 0.85,
+    "labels": [
+      "dog",
+      "pet supply",
+      "dog food",
+      "dog supply",
+      "canidae",
+      "retriever",
+      "pet food",
+      "gun dog"
+    ],
+    "is_product_image": true,
+    "safe_search_ok": true
+  },
+  "a157269be605d199": {
+    "score": 0.44999999999999996,
+    "labels": [
+      "food",
+      "ingredient",
+      "meat",
+      "packaging and labeling",
+      "pet supply",
+      "nut",
+      "convenience food",
+      "natural foods",
+      "produce",
+      "frozen food",
+      "staple food",
+      "pork",
+      "hidden-lilies"
+    ],
+    "is_product_image": false,
+    "safe_search_ok": true
+  },
+  "42b30064f3c5091d": {
+    "score": 0.7,
+    "labels": [
+      "dog food",
+      "food",
+      "ingredient",
+      "pet supply",
+      "pet food",
+      "animal feed",
+      "dog supply",
+      "meat",
+      "pork",
+      "produce",
+      "small animal food"
+    ],
+    "is_product_image": true,
+    "safe_search_ok": true
+  },
+  "41c2ae864efbaea2": {
+    "score": 0.75,
+    "labels": [
+      "dog food",
+      "pet supply",
+      "ingredient",
+      "dog supply",
+      "pet food",
+      "animal feed",
+      "food",
+      "snout",
+      "puppy",
+      "pet vitamins & supplements",
+      "packaging and labeling",
+      "canidae",
+      "label",
+      "small animal food"
+    ],
+    "is_product_image": true,
+    "safe_search_ok": true
+  }
+}

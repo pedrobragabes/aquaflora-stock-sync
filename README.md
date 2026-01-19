@@ -1,159 +1,211 @@
-# AquaFlora Stock Sync v2.1
+# AquaFlora Stock Sync v3.0
 
-**Sincronizador inteligente de estoque** - Migra dados do ERP Athos para WooCommerce com segurança máxima.
+**Sistema completo de sincronização de estoque** - Migra dados do ERP Athos para WooCommerce com imagens automáticas via IA.
 
-![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Dashboard-green.svg)
-![Discord](https://img.shields.io/badge/Discord-Bot%202.0-blueviolet.svg)
+![Vision AI](https://img.shields.io/badge/Google-Vision%20AI-orange.svg)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)
-![Tests](https://img.shields.io/badge/Tests-pytest-yellow.svg)
 
 ---
 
 ## 🎯 O que este projeto faz
 
-Lê arquivos CSV "sujos" exportados do sistema Athos ERP e sincroniza com sua loja WooCommerce:
+Sistema completo para e-commerce que:
 
-- **Parsing inteligente** de CSVs com cabeçalhos misturados e lixo
-- **Detecção automática** de marcas (160+), pesos e categorias
-- **Geração de descrições SEO** em HTML com emojis
-- **Sincronização segura** com múltiplas camadas de proteção
-- **Dashboard Web** para controle visual
-- **Bot Discord 2.0** com comandos inteligentes
-- **Notificações** via Discord/Telegram
+1. **Lê CSV do ERP Athos** → Parser inteligente que limpa dados "sujos"
+2. **Enriquece produtos** → Detecta marca, peso, gera SEO
+3. **Busca imagens** → Google Search + Vision AI validation
+4. **Sincroniza WooCommerce** → API segura com PriceGuard
+5. **Dashboard Web** → Controle visual completo
+6. **Bot Discord** → Comandos remotos
 
 ---
 
-## ⚡ Quick Start
+## 🚀 Fluxo de Produção
 
-```bash
-# 1. Clone e entre no diretório
-cd aquaflora-stock-sync
+### Passo 1: Buscar Imagens
 
-# 2. Instale dependências
-pip install -r requirements.txt
+```powershell
+# Definir encoding UTF-8 (Windows)
+$env:PYTHONIOENCODING="utf-8"
 
-# 3. Configure credenciais
-cp .env.example .env
-# Edite .env com suas credenciais WooCommerce
+# Rodar scraper (só produtos com estoque)
+python scrape_all_images.py --stock-only
 
-# 4. Mapeie produtos existentes (IMPORTANTE - faça primeiro!)
-python main.py --map-site
-
-# 5. Sincronize com segurança
-python main.py --input "data\input\estoque.csv" --lite --dry-run
+# Ou todos os produtos
+python scrape_all_images.py
 ```
 
----
+**Opções:**
+| Flag | Descrição |
+|------|-----------|
+| `--stock-only` | Só produtos com estoque > 0 |
+| `--limit N` | Limitar a N produtos |
+| `--reset` | Recomeçar do zero |
 
-## 🖥️ Dashboard Web (v2.1)
+**Saídas:**
 
-Interface visual para controlar sincronização sem usar terminal:
+- `data/images/*.jpg` - Imagens 800x800
+- `data/scraper_progress.json` - Progresso
+- `data/vision_cache.json` - Cache Vision AI
 
-```bash
-python -m uvicorn dashboard.app:app --host localhost --port 8080
+### Passo 2: Gerar CSV para WooCommerce
+
+```powershell
+# Modo FULL (nome, descrição, imagens, preço, estoque)
+python main.py --input data/input/Athos.csv
+
+# Modo LITE (só preço e estoque - preserva SEO manual)
+python main.py --input data/input/Athos.csv --lite
 ```
 
-Acesse: **http://localhost:8080**
+**Saídas:**
 
-### Funcionalidades:
-- 📊 **Métricas em tempo real** (atualizam a cada 3s)
-- 🚀 **Botão "Sincronizar Agora"** - um clique para rodar
-- 📤 **Upload de CSV** via browser
-- ⏰ **Agendamento APScheduler** - sync automático funcional
-- 📋 **Histórico de preços** - tabela price_history
-- 🔒 **Autenticação opcional** (HTTP Basic Auth)
+- `data/output/woocommerce_import_*.csv` - CSV para importar
+- Coluna `Images` preenchida automaticamente se imagem existe
 
-### Endpoints API:
-| Endpoint | Descrição |
-|----------|----------|
-| `/docs` | Swagger UI interativo |
-| `/redoc` | Documentação ReDoc |
-| `/metrics` | Métricas para monitoring |
+### Passo 3: Importar no WooCommerce
+
+1. WooCommerce → Produtos → Importar
+2. Selecione o CSV gerado
+3. Mapeie as colunas (automático se padrão)
+4. Execute importação
+
+### Passo 4: Excluir Antigos
+
+Após importação bem-sucedida:
+
+1. WooCommerce → Produtos → Filtrar por "Sem imagem"
+2. Ações em lote → Mover para lixeira
 
 ---
 
-## 🤖 Discord Bot 2.0 (NOVO!)
+## 📊 Estatísticas do Projeto
 
-Bot com comandos inteligentes para controle remoto:
+| Métrica                 | Valor  |
+| ----------------------- | ------ |
+| Produtos no ERP         | 4.352  |
+| Excluídos (digital)     | ~300   |
+| Válidos para e-commerce | ~2.700 |
+| Departamentos           | 12     |
+| Marcas detectadas       | 160+   |
+| Semânticas Vision AI    | 80+    |
 
-```bash
+### Exclusões Automáticas
+
+| Categoria         | Motivo                       |
+| ----------------- | ---------------------------- |
+| FERRAMENTAS       | Pesado, frete caro           |
+| INSUMO            | Sacos pesados                |
+| Decoração aquário | Baixa margem, difícil imagem |
+| Itens pequenos    | Anzol avulso, miçangas       |
+| Perecíveis        | Isca viva                    |
+| Bebidas           | Legislação, quebra           |
+| > 15kg            | Frete inviável               |
+
+---
+
+## 🖼️ Image Scraper v3
+
+Sistema inteligente de busca de imagens:
+
+### Funcionalidades
+
+- ✅ **Google Custom Search** - Busca por nome + marca
+- ✅ **Vision AI Validation** - Score 0-1 por qualidade
+- ✅ **Validação Semântica** - Labels devem corresponder ao produto
+- ✅ **Cache de Vision AI** - Evita análises duplicadas
+- ✅ **Fallback de Busca** - 3 estratégias de query
+- ✅ **Retry com Backoff** - Trata erros 429
+- ✅ **Prioridade por Estoque** - Processa estoque > 0 primeiro
+- ✅ **Skip de Existentes** - Zero custo se imagem já existe
+
+### Thresholds de Score
+
+| Departamento               | Score Mínimo |
+| -------------------------- | ------------ |
+| PET, RACAO, PESCA          | 0.45         |
+| FARMACIA, GERAL, TABACARIA | 0.35         |
+| AVES, CUTELARIA, PISCINA   | 0.35         |
+
+### APIs Necessárias (.env)
+
+```env
+# Google Custom Search
+GOOGLE_API_KEY=AIzaSy...
+GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
+
+# Vision AI (recomendado)
+VISION_AI_ENABLED=true
+```
+
+### Custo Estimado
+
+| Cenário        | Produtos | Custo   |
+| -------------- | -------- | ------- |
+| Só com estoque | ~3.200   | ~R$ 86  |
+| Todos válidos  | ~4.100   | ~R$ 112 |
+
+_Baseado em Vision AI $1.50/1000 imagens_
+
+---
+
+## 🖥️ Dashboard Web
+
+Interface visual completa:
+
+```powershell
+python -m uvicorn dashboard.app:app --host 0.0.0.0 --port 8080
+```
+
+### Endpoints API
+
+| Endpoint                           | Descrição             |
+| ---------------------------------- | --------------------- |
+| `GET /`                            | Dashboard principal   |
+| `GET /images`                      | Curadoria de imagens  |
+| `GET /api/status`                  | Status do sync        |
+| `GET /api/images/missing`          | Produtos sem imagem   |
+| `GET /api/images/scraper-progress` | Progresso do scraper  |
+| `POST /api/sync`                   | Iniciar sincronização |
+| `GET /metrics`                     | Métricas Prometheus   |
+| `GET /docs`                        | Swagger UI            |
+
+---
+
+## 🤖 Bot Discord
+
+Controle remoto via Discord:
+
+```powershell
 python bot_control.py
 ```
 
-### Comandos:
-| Comando | Descrição |
-|---------|-----------|
-| `!ajuda` | Menu visual de todos os comandos |
-| `!status` | Status atual do sistema |
-| `!whitelist` | Estatísticas de SKUs mapeados |
-| `!produtos` | Últimos 10 produtos alterados |
-| `!precos` | Top 5 maiores altas e quedas |
-| `!forcar_agora` | Força sync imediato |
-| `!log` | Envia último arquivo de log |
+### Comandos
 
-### Notificações Premium:
-- **Logo AquaFlora** como thumbnail
-- **Cores semafóricas:** 🟢 Verde (sucesso), 🟡 Amarelo (warnings), 🔴 Vermelho (erros)
-- **Top 10 Destaques** com variação de preço
-- **Seção Price Guard** para bloqueios destacados
+| Comando   | Descrição             |
+| --------- | --------------------- |
+| `!status` | Status do sistema     |
+| `!sync`   | Iniciar sincronização |
+| `!ajuda`  | Lista de comandos     |
 
 ---
 
-## 🚀 Modos de Execução
-
-| Comando | Descrição |
-|---------|-----------|
-| `--map-site` | Baixa SKUs do WooCommerce e cria whitelist local |
-| `--input arquivo.csv` | Processa arquivo do ERP |
-| `--lite` | Atualiza **apenas** preço e estoque (preserva SEO) |
-| `--dry-run` | Testa sem enviar para WooCommerce |
-| `--allow-create` | Permite criar produtos novos |
-| `--watch` | Modo daemon - monitora pasta |
-| `--log-level DEBUG` | Log detalhado |
-
-### Exemplos de uso:
+## 🐳 Deploy com Docker
 
 ```bash
-# Primeira execução: mapear site
-python main.py --map-site
+# Build e start
+docker-compose up -d
 
-# Atualização rápida de preço/estoque (mais seguro)
-python main.py --input "data\input\estoque.csv" --lite
+# Ver logs
+docker-compose logs -f
 
-# Sincronização completa (nome, descrição, atributos)
-python main.py --input "data\input\estoque.csv"
-
-# Permitir criação de novos produtos
-python main.py --input "data\input\estoque.csv" --allow-create
-
-# Testar sem enviar
-python main.py --input "data\input\estoque.csv" --lite --dry-run
+# Parar
+docker-compose down
 ```
 
----
-
-## 🛡️ Camadas de Segurança
-
-### 1. **Whitelist de SKUs**
-- Por padrão, **NÃO cria** produtos novos
-- Só atualiza SKUs já mapeados do site
-- Use `--map-site` para popular a whitelist
-- Use `--allow-create` para habilitar criação
-
-### 2. **Price Guard**
-- Bloqueia atualizações com variação > 40%
-- Evita erros de digitação no ERP
-- Produtos bloqueados vão para log de revisão
-
-### 3. **Dual Hash Strategy**
-- `hash_full`: Detecta mudanças em nome, descrição, atributos
-- `hash_fast`: Detecta mudanças apenas em preço e estoque
-- Envia só o necessário, economizando API calls
-
-### 4. **Parser de Preços Inteligente**
-- Auto-detecta formato: Brasileiro (1.234,56) vs Americano (1,234.56)
-- Evita erros de conversão de vírgula/ponto
+Ver [DEPLOY.md](DEPLOY.md) para guia completo de deploy no servidor.
 
 ---
 
@@ -161,111 +213,70 @@ python main.py --input "data\input\estoque.csv" --lite --dry-run
 
 ```
 aquaflora-stock-sync/
+├── main.py                 # CLI principal
+├── scrape_all_images.py    # Image scraper v3
+├── bot_control.py          # Bot Discord
 ├── config/
-│   └── settings.py           # Configurações (Pydantic)
+│   ├── settings.py         # Configurações (.env)
+│   ├── brands.json         # Marcas detectadas
+│   └── exclusion_list.json # Exclusões para e-commerce
 ├── src/
-│   ├── parser.py             # AthosParser - lê CSV sujo
-│   ├── enricher.py           # ProductEnricher - marca, peso, SEO
-│   ├── database.py           # SQLite - hashes e whitelist
-│   ├── sync.py               # WooSyncManager - API sync
-│   ├── notifications.py      # Webhooks Discord/Telegram
-│   └── models.py             # Pydantic models
-├── dashboard/                # Dashboard Web (NOVO!)
-│   ├── app.py                # FastAPI backend
-│   ├── templates/            # Jinja2 + HTMX
-│   └── static/               # CSS + JS
-├── bot_control.py            # Discord bot 2.0
-├── main.py                   # Entry point principal
+│   ├── parser.py           # Parser CSV Athos
+│   ├── enricher.py         # Enriquecimento de produtos
+│   ├── database.py         # SQLite + histórico
+│   ├── sync.py             # API WooCommerce
+│   ├── image_scraper.py    # Google + Vision AI
+│   ├── models.py           # Modelos Pydantic
+│   └── notifications.py    # Discord/Telegram
+├── dashboard/
+│   ├── app.py              # FastAPI + HTMX
+│   └── templates/          # HTML Jinja2
 ├── data/
-│   ├── input/                # Arquivos do ERP
-│   └── output/               # CSVs gerados
-├── logs/                     # Logs rotativos
-├── products.db               # Banco SQLite
-├── Dockerfile                # Deploy containerizado
-├── docker-compose.yml        # Orquestração
-├── .env                      # Credenciais (não versionar!)
-└── requirements.txt          # Dependências Python
+│   ├── input/              # CSVs do ERP
+│   ├── output/             # CSVs para WooCommerce
+│   └── images/             # Imagens scraped
+├── logs/                   # Logs rotativos
+└── tests/                  # Testes pytest
 ```
-
----
-
-## 🐳 Deploy com Docker (Proxmox)
-
-```bash
-# No servidor
-docker-compose up -d
-
-# Dashboard: http://IP:8080
-# Bot Discord roda automaticamente
-```
-
-O `docker-compose.yml` inclui:
-- Dashboard web (porta 8080)
-- Bot Discord (opcional)
-- Volumes persistentes para DB, logs e arquivos
 
 ---
 
 ## ⚙️ Configuração (.env)
 
 ```env
-# WooCommerce API
+# WooCommerce
 WOO_URL=https://sualoja.com.br
-WOO_CONSUMER_KEY=ck_xxxxx
-WOO_CONSUMER_SECRET=cs_xxxxx
+WOO_CONSUMER_KEY=ck_xxx
+WOO_CONSUMER_SECRET=cs_xxx
 
-# Caminhos
-INPUT_DIR=./data/input
-OUTPUT_DIR=./data/output
-DB_PATH=./products.db
+# Google APIs
+GOOGLE_API_KEY=AIzaSy...
+GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
+VISION_AI_ENABLED=true
 
-# Opções
-SYNC_ENABLED=true
-DRY_RUN=false
+# Discord (opcional)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+DISCORD_BOT_TOKEN=MTI...
 
 # Segurança
 PRICE_GUARD_MAX_VARIATION=40
-ZERO_GHOST_STOCK=false  # CUIDADO: só ative com arquivo completo
-
-# Notificações
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-
-# Discord Bot
-DISCORD_BOT_TOKEN=seu_token_aqui
-DISCORD_CHANNEL_ID=seu_channel_id
+DRY_RUN=false
 ```
 
 ---
 
-## 📋 Marcas Detectadas (160+)
+## 🧪 Testes
 
-O sistema detecta automaticamente marcas como:
-- **Pet Food**: Royal Canin, Premier, Golden, Farmina, Pedigree...
-- **Veterinária**: NexGard, Bravecto, Simparic, Frontline...
-- **Aquarismo**: Alcon, Tetra, Sera, Tropical, Ocean Tech...
-- **Pesca**: Marine Sports, Shimano, Daiwa...
-- **Agro**: Forth, Dimy, Nutriplan...
-- **Piscina**: Genco, HTH, Hidroazul...
-- **Ferramentas**: Tramontina, Starrett...
+```powershell
+# Rodar todos
+pytest
 
----
-
-## 🔧 Troubleshooting
-
-### "No products mapped! Run --map-site first"
-Execute `python main.py --map-site` para popular a whitelist.
-
-### "WooCommerce credentials not configured"
-Configure `WOO_URL`, `WOO_CONSUMER_KEY`, `WOO_CONSUMER_SECRET` no `.env`.
-
-### Preços errados (ex: 99.90 virando 9990)
-O parser foi atualizado para auto-detectar formato. Se persistir, verifique o formato do CSV.
-
-### Dashboard não inicia
-Instale as dependências: `pip install fastapi uvicorn jinja2 python-multipart`
+# Com coverage
+pytest --cov=src --cov-report=html
+```
 
 ---
 
-## 📄 Licença
+## 📝 Licença
 
-Proprietary - AquaFlora Agroshop © 2026
+Projeto privado - AquaFlora Agroshop © 2026

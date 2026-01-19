@@ -15,6 +15,14 @@ Usage:
 import argparse
 import logging
 import sys
+import io
+import os
+
+# Fix Windows console encoding for emojis
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -260,15 +268,19 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_file = output_dir / f"woocommerce_import_{timestamp}.csv"
     
+    # Image directory for automatic image linking
+    image_dir = Path("data/images")
+    
     if not products:
         return output_file
     
-    # Define CSV columns
+    # Define CSV columns (Images added for WooCommerce import)
     columns = [
         'SKU', 'Name', 'Published', 'Is featured?', 'Visibility in catalog',
         'Short description', 'Description', 'Tax status', 'Tax class',
         'In stock?', 'Stock', 'Backorders allowed?', 'Sold individually?',
         'Weight (kg)', 'Regular price', 'Sale price', 'Categories', 'Tags',
+        'Images',  # NEW: Image path/URL for WooCommerce
         'Attribute 1 name', 'Attribute 1 value(s)', 'Attribute 1 visible',
         'Attribute 1 global', 'Allow customer reviews?',
         'Meta: _custo', 'Meta: _estoque_minimo', 'Meta: _margem',
@@ -280,6 +292,15 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
         writer.writerow(columns)
         
         for p in products:
+            # Check if image exists for this SKU
+            image_path = image_dir / f"{p.sku}.jpg"
+            image_url = ""
+            if image_path.exists():
+                # Use relative path or configure your WooCommerce upload URL
+                # For direct import: use full URL to your server
+                # Example: https://yoursite.com/wp-content/uploads/products/{sku}.jpg
+                image_url = str(image_path.absolute())  # Local path (for reference)
+            
             row = [
                 p.sku,
                 p.name,
@@ -299,6 +320,7 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
                 '',  # Sale price
                 p.category,
                 ', '.join(p.tags),
+                image_url,  # NEW: Image path
                 'Marca' if p.brand else '',
                 p.brand or '',
                 1 if p.brand else 0,

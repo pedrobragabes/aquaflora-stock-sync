@@ -1,359 +1,392 @@
-# 📋 Contexto do Projeto - AquaFlora Stock Sync
+# 📋 Contexto Técnico - AquaFlora Stock Sync v3.0
 
-> **Documento de referência para desenvolvimento futuro**  
-> Última atualização: Janeiro 2026
+> **Documento de referência para desenvolvimento e manutenção**  
+> Última atualização: 19 Janeiro 2026
 
 ---
 
 ## 🎯 Visão Geral
 
-**AquaFlora Stock Sync** é um sistema de sincronização inteligente de estoque que migra dados do **ERP Athos** para **WooCommerce**. O sistema foi desenvolvido para a loja AquaFlora Agroshop.
+**AquaFlora Stock Sync** é um sistema completo de e-commerce que:
 
-### Funcionalidades Principais
-
-| Funcionalidade | Descrição |
-|----------------|-----------|
-| **Parser de CSV** | Lê arquivos "sujos" exportados do ERP Athos |
-| **Enriquecimento** | Detecta marcas (160+), extrai peso, gera descrições SEO |
-| **Sincronização** | Atualiza produtos via API WooCommerce com segurança |
-| **Dashboard Web** | Interface visual para controle sem terminal |
-| **Bot Discord** | Controle remoto via comandos Discord |
-| **Notificações** | Relatórios via Discord/Telegram webhooks |
+1. Importa dados do ERP Athos (CSV)
+2. Enriquece com marca, peso, SEO
+3. Busca imagens automaticamente (Google + Vision AI)
+4. Sincroniza com WooCommerce
+5. Fornece dashboard web e bot Discord
 
 ---
 
-## 📁 Estrutura do Projeto
+## 📊 Números do Projeto
+
+| Métrica                     | Valor  |
+| --------------------------- | ------ |
+| Produtos no ERP             | 4.352  |
+| Departamentos               | 12     |
+| Marcas detectadas           | 160+   |
+| Semânticas Vision AI        | 80+    |
+| Produtos válidos e-commerce | ~2.700 |
+| Excluídos (automático)      | ~300   |
+
+---
+
+## 🏗️ Arquitetura
 
 ```
-aquaflora-stock-sync/
-├── main.py                 # Entry point principal (CLI)
-├── bot_control.py          # Discord Bot 2.0
-├── config/
-│   ├── settings.py         # Pydantic Settings (carrega .env)
-│   └── brands.json         # Cache editável de marcas (v2.1)
-├── src/
-│   ├── parser.py           # AthosParser - lê CSV do ERP
-│   ├── enricher.py         # ProductEnricher - marca, peso, SEO
-│   ├── database.py         # ProductDatabase - SQLite + price_history
-│   ├── sync.py             # WooSyncManager - API WooCommerce
-│   ├── notifications.py    # NotificationService - webhooks
-│   ├── models.py           # Pydantic models + hashes
-│   ├── exceptions.py       # Exceções customizadas (v2.1)
-│   └── logging_config.py   # JSON/Color formatters (v2.1)
-├── dashboard/
-│   ├── app.py              # FastAPI + HTMX + APScheduler
-│   ├── templates/          # Jinja2 templates
-│   └── static/             # CSS responsivo + JS
-├── tests/                  # Suite pytest (v2.1)
-│   ├── conftest.py         # Fixtures
-│   ├── test_parser.py
-│   ├── test_enricher.py
-│   ├── test_database.py
-│   └── test_models.py
-├── data/
-│   ├── input/              # CSVs do ERP
-│   └── output/             # CSVs gerados
-├── logs/                   # Logs rotativos
-├── products.db             # SQLite database
-├── Dockerfile              # Deploy containerizado
-├── docker-compose.yml      # Orquestração (dashboard + bot)
-├── requirements.txt        # Dependências Python
-├── pytest.ini              # Configuração de testes
-├── COMANDOS.md             # Guia de comandos (v2.1)
-├── .env                    # Credenciais (não versionado)
-└── DEPLOY.md               # Guia de deploy Proxmox
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   ERP Athos     │────▶│   AthosParser   │────▶│ ProductEnricher │
+│   (CSV)         │     │   (parser.py)   │     │  (enricher.py)  │
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+┌─────────────────┐     ┌─────────────────┐              │
+│   WooCommerce   │◀────│  WooSyncManager │◀─────────────┘
+│   (API REST)    │     │   (sync.py)     │
+└─────────────────┘     └─────────────────┘
+         ▲
+         │
+┌────────┴────────┐     ┌─────────────────┐
+│  Image Scraper  │────▶│   Vision AI     │
+│ (scrape_all_images)   │ (image_scraper) │
+└─────────────────┘     └─────────────────┘
 ```
 
 ---
 
-## 🔧 Arquitetura e Pipeline
+## 📁 Estrutura de Arquivos
 
-```mermaid
-graph LR
-    A[CSV ERP Athos] --> B[AthosParser]
-    B --> C[ProductEnricher]
-    C --> D[ProductDatabase]
-    D --> E{Decisão de Sync}
-    E -->|NEW| F[POST WooCommerce]
-    E -->|FULL_UPDATE| G[PUT Full]
-    E -->|FAST_UPDATE| H[PUT Price/Stock]
-    E -->|SKIP| I[Ignorar]
-    E -->|BLOCKED| J[PriceGuard Log]
-    F & G & H --> K[Notificação Discord/Telegram]
-```
+### Arquivos Principais
 
-### Componentes Principais
+| Arquivo                | Função                                |
+| ---------------------- | ------------------------------------- |
+| `main.py`              | CLI principal, orquestra todo o fluxo |
+| `scrape_all_images.py` | Scraper de imagens v3                 |
+| `bot_control.py`       | Bot Discord 2.0                       |
+| `dashboard/app.py`     | FastAPI + HTMX                        |
 
-#### 1. `parser.py` - AthosParser
+### Módulos src/
 
-**Responsabilidade:** Ler o CSV "sujo" exportado do ERP Athos.
+| Módulo             | Responsabilidade              |
+| ------------------ | ----------------------------- |
+| `parser.py`        | Lê CSV "sujo" do ERP Athos    |
+| `enricher.py`      | Detecta marca, peso, gera SEO |
+| `database.py`      | SQLite + histórico de preços  |
+| `sync.py`          | API WooCommerce + PriceGuard  |
+| `image_scraper.py` | Google Search + Vision AI     |
+| `models.py`        | Pydantic models + hashes      |
+| `notifications.py` | Discord/Telegram webhooks     |
+| `exceptions.py`    | Exceções customizadas         |
 
-- **Problema:** O ERP exporta um "relatório" com lixo (headers da empresa, paginação, totais)
-- **Solução:** Detecta o marcador `"Valor Custo"` e extrai dados após ele
-- **Conversão:** Números brasileiros (1.234,56) → float (1234.56)
+### Configurações config/
+
+| Arquivo               | Conteúdo                         |
+| --------------------- | -------------------------------- |
+| `settings.py`         | Pydantic Settings (carrega .env) |
+| `brands.json`         | Lista de 160+ marcas             |
+| `exclusion_list.json` | Exclusões para e-commerce        |
+
+---
+
+## 🔧 Componentes Detalhados
+
+### 1. AthosParser (parser.py)
+
+**Problema:** ERP exporta CSV "relatório" com lixo (headers empresa, paginação, totais).
+
+**Solução:**
+
+- Detecta formato automaticamente (limpo vs sujo)
+- Remove linhas de garbage
+- Extrai departamento de linhas "Departamento: XXX"
+- Normaliza encoding (UTF-8 + ftfy)
+
+**Campos extraídos:**
 
 ```python
-# Patterns de "lixo" filtrados
-GARBAGE_PATTERNS = [
-    r"^Total\s*(Venda|Custo):",
-    r"Página\s*-?\d+\s*de\s*\d+",
-    r"^Relatório\s*de\s*Estoque",
-    ...
-]
+RawProduct:
+  - sku: str           # Código interno
+  - name: str          # Descrição
+  - stock: float       # Estoque
+  - price: float       # Preço venda
+  - cost: float        # Custo
+  - department: str    # Departamento
+  - ean: str           # Código de barras (CodigoBarras)
+  - brand: str         # Marca
 ```
 
-#### 2. `enricher.py` - ProductEnricher
+### 2. ProductEnricher (enricher.py)
 
-**Responsabilidade:** Enriquecer produtos com SEO e metadados.
+**Funcionalidades:**
 
-- **Detecção de Marcas:** 160+ marcas mapeadas (Royal Canin, Pedigree, NexGard, etc.)
-- **Extração de Peso:** Regex para kg, g, ml, litros
-- **Geração de Descrições:** HTML com emojis para WooCommerce
-- **Correção de Nomes:** Title case + acentuação (racao → Ração)
+- Detecta marca em 160+ padrões
+- Extrai peso do nome (500g, 1kg, 1,5L)
+- Gera categoria WooCommerce
+- Cria descrição SEO em HTML
+- Cria short_description
+
+**Exemplo de saída:**
 
 ```python
-KNOWN_BRANDS = {
-    'royal canin': 'Royal Canin',
-    'nexgard': 'NexGard',
-    'bravecto': 'Bravecto',
-    # ... 160+ marcas
+EnrichedProduct:
+  - sku: "7898242033022"
+  - name: "Sachê Special Dog Carne 100g"
+  - brand: "Special Dog"
+  - weight_kg: 0.1
+  - category: "Ração > Cachorro > Úmida"
+  - description: "<div>...</div>"  # HTML com emojis
+```
+
+### 3. WooSyncManager (sync.py)
+
+**Estratégia de Sync:**
+
+```
+1. Calcula hash_full (todos os campos)
+2. Calcula hash_fast (só preço/estoque)
+3. Compara com banco de dados
+4. Decide: NEW | FULL_UPDATE | FAST_UPDATE | SKIP | BLOCKED
+```
+
+**PriceGuard:**
+
+- Bloqueia variação > 40% (configurável)
+- Log + notificação
+- Evita erros de digitação no ERP
+
+**Modos:**
+| Modo | Campos Atualizados |
+|------|-------------------|
+| FULL | Nome, descrição, preço, estoque, categoria |
+| LITE | Apenas preço e estoque (preserva SEO manual) |
+
+### 4. Image Scraper v3 (scrape_all_images.py)
+
+**Pipeline:**
+
+```
+1. Carrega produtos do CSV
+2. Aplica exclusões (departamento + keywords)
+3. Ordena por prioridade (estoque > 0 primeiro)
+4. Para cada produto:
+   a. Verifica se imagem existe → SKIP
+   b. Verifica cache de Vision → usa score
+   c. Busca no Google Custom Search
+   d. Analisa com Vision AI
+   e. Valida score semântico
+   f. Salva imagem 800x800
+5. Salva progresso a cada 20 produtos
+```
+
+**Otimizações v3:**
+
+- [1] Cache de Vision AI por hash URL
+- [2] Fallback de busca (3 estratégias)
+- [3] Retry com backoff exponencial
+- [4] Skip de imagens existentes
+- [5] Prioridade por estoque
+
+**Thresholds:**
+| Departamento | Score Mínimo |
+|--------------|--------------|
+| PET, RACAO, PESCA | 0.45 |
+| Demais (difíceis) | 0.35 |
+
+### 5. Dashboard (dashboard/app.py)
+
+**Stack:**
+
+- FastAPI + Jinja2 + HTMX
+- APScheduler para sync agendado
+- HTTP Basic Auth opcional
+
+**Endpoints principais:**
+| Endpoint | Função |
+|----------|--------|
+| `GET /` | Dashboard principal |
+| `GET /images` | Curadoria de imagens |
+| `POST /api/sync` | Iniciar sync |
+| `GET /api/images/missing` | Produtos sem imagem |
+| `GET /api/images/scraper-progress` | Status scraper |
+| `GET /metrics` | Prometheus metrics |
+
+---
+
+## 💾 Banco de Dados (SQLite)
+
+### Tabela: products
+
+```sql
+CREATE TABLE products (
+    sku TEXT PRIMARY KEY,
+    name TEXT,
+    woo_id INTEGER,           -- ID no WooCommerce
+    last_hash_full TEXT,      -- Hash de todos os campos
+    last_hash_fast TEXT,      -- Hash só preço/estoque
+    last_price REAL,          -- Último preço sincronizado
+    last_sync_at DATETIME,
+    exists_on_site INTEGER,   -- 1 = mapeado do site
+    created_at DATETIME
+);
+```
+
+### Tabela: price_history
+
+```sql
+CREATE TABLE price_history (
+    id INTEGER PRIMARY KEY,
+    sku TEXT,
+    old_price REAL,
+    new_price REAL,
+    variation_percent REAL,
+    blocked INTEGER,          -- 1 = bloqueado por PriceGuard
+    created_at DATETIME
+);
+```
+
+---
+
+## 📤 Exclusões para E-commerce
+
+### config/exclusion_list.json
+
+```json
+{
+  "exclude_departments": ["FERRAMENTAS", "INSUMO"],
+  "exclude_keywords": {
+    "pereciveis": ["isca viva", "minhoca viva"],
+    "decoracao_aquario": ["pedra dolomita", "cascalho", "substrato"],
+    "itens_pequenos": ["anzol avulso", "miçanga"],
+    "muito_pesados": ["25kg", "50kg", "20kg", "15kg"]
+  },
+  "max_weight_kg": 15.0
 }
 ```
 
-#### 3. `database.py` - ProductDatabase
+### Lógica de Exclusão
 
-**Responsabilidade:** Gerenciar estado de sincronização com SQLite.
-
-**Tabela `products`:**
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `sku` | TEXT PK | SKU do produto |
-| `woo_id` | INTEGER | ID no WooCommerce |
-| `last_hash_full` | TEXT | Hash de todos os campos |
-| `last_hash_fast` | TEXT | Hash de preço+estoque |
-| `last_price` | REAL | Último preço sincronizado |
-| `exists_on_site` | INTEGER | Flag de whitelist |
-
-**Whitelist:** Produtos mapeados via `--map-site` são marcados para sync seguro.
-
-#### 4. `sync.py` - WooSyncManager
-
-**Responsabilidade:** Sincronizar com API WooCommerce.
-
-**Estratégias:**
-- **Dual Hash:** `hash_full` detecta mudanças em nome/descrição, `hash_fast` apenas preço/estoque
-- **PriceGuard:** Bloqueia variações > 40% (evita erros de digitação)
-- **Batch Updates:** Atualiza até 100 produtos por request
-- **Retry com Backoff:** 3 tentativas com delay exponencial
-
-**Modos:**
-| Modo | Flag | Comportamento |
-|------|------|---------------|
-| FULL | (default) | Atualiza todos os campos |
-| LITE | `--lite` | **Apenas** preço e estoque |
-| DRY RUN | `--dry-run` | Testa sem enviar |
-
-#### 5. `notifications.py` - NotificationService
-
-**Responsabilidade:** Enviar relatórios premium via webhooks.
-
-- **Discord:** Embeds com logo, cores semafóricas, top 10 mudanças
-- **Telegram:** Mensagem Markdown simples
-- **Cores Semafóricas:** 🟢 Verde (sucesso), 🟡 Amarelo (warnings), 🔴 Vermelho (erros)
-
-#### 6. `models.py` - Modelos Pydantic
-
-**Modelos principais:**
-
-| Modelo | Uso |
-|--------|-----|
-| `RawProduct` | Produto parseado do CSV |
-| `EnrichedProduct` | Produto enriquecido com SEO |
-| `WooPayloadFull` | Payload completo para API |
-| `WooPayloadFast` | Payload mínimo (preço/estoque) |
-| `SyncSummary` | Resultado da sincronização |
-| `PriceWarning` | Produto bloqueado pelo PriceGuard |
-| `ProductChange` | Mudança individual para relatório |
+1. **Departamento** - FERRAMENTAS, INSUMO
+2. **Keywords** - Perecíveis, decoração, pequenos, pesados
+3. **Peso** - > 15kg automaticamente excluído
 
 ---
 
-## 🖥️ Dashboard Web
+## 🔌 APIs Externas
 
-**Tecnologia:** FastAPI + Jinja2 + HTMX
+### Google Custom Search
 
-### Endpoints
+```
+Endpoint: https://www.googleapis.com/customsearch/v1
+Quota: 100 queries/dia (free) ou $5/1000 queries
+Uso: Buscar imagens de produtos
+```
 
-| Rota | Método | Descrição |
-|------|--------|-----------|
-| `/` | GET | Página principal |
-| `/api/status` | GET | Status atual |
-| `/api/sync/run` | POST | Inicia sincronização |
-| `/api/sync/upload` | POST | Upload de CSV |
-| `/api/map-site` | POST | Mapeia whitelist |
-| `/api/products` | GET | Últimas mudanças |
-| `/partials/*` | GET | Fragmentos HTMX |
+### Google Vision AI
 
-### Estado Global
+```
+Endpoint: https://vision.googleapis.com/v1/images:annotate
+Custo: $1.50/1000 imagens
+Uso: Validar qualidade e labels das imagens
+```
 
-```python
-class AppState:
-    is_syncing: bool = False
-    last_sync: Optional[datetime] = None
-    sync_status: str = "Idle"
-    scheduler_enabled: bool = False
-    scheduled_time: str = "11:00"
+### WooCommerce REST API
+
+```
+Endpoint: {WOO_URL}/wp-json/wc/v3/products
+Autenticação: OAuth 1.0 (consumer_key + consumer_secret)
+Uso: CRUD de produtos
 ```
 
 ---
 
-## 🤖 Discord Bot 2.0
+## 🧪 Testes
 
-**Tecnologia:** py-cord (discord.py fork)
+### Estrutura
 
-### Comandos
+```
+tests/
+├── conftest.py        # Fixtures compartilhadas
+├── test_parser.py     # Testes do parser
+├── test_enricher.py   # Testes do enricher
+├── test_database.py   # Testes do banco
+├── test_models.py     # Testes dos modelos
+└── test_image_scraper.py  # Testes do scraper
+```
 
-| Comando | Descrição |
-|---------|-----------|
-| `!ajuda` | Menu visual de comandos |
-| `!status` | Status atual do sistema |
-| `!whitelist` | Estatísticas de SKUs mapeados |
-| `!produtos` | Últimos 10 produtos alterados |
-| `!precos` | Top 5 altas e quedas de preço |
-| `!forcar_agora` | Força sync imediato |
-| `!log` | Envia último arquivo de log |
+### Executar
 
----
+```powershell
+# Todos os testes
+pytest
 
-## 🛡️ Camadas de Segurança
+# Com coverage
+pytest --cov=src --cov-report=html
 
-### 1. Whitelist de SKUs
-
-- Por padrão, **NÃO cria** produtos novos
-- Só atualiza SKUs mapeados via `--map-site`
-- Flag `--allow-create` habilita criação
-
-### 2. PriceGuard
-
-- Bloqueia variações > 40%
-- Evita erros de digitação no ERP
-- Produtos bloqueados vão para relatório
-
-### 3. Dual Hash Strategy
-
-- `hash_full`: Mudanças em nome, descrição, atributos
-- `hash_fast`: Mudanças apenas em preço e estoque
-- Economiza API calls enviando só o necessário
-
-### 4. Parser de Preços Inteligente
-
-- Auto-detecta formato: Brasileiro (1.234,56) vs Americano (1,234.56)
-- Evita erros de conversão de vírgula/ponto
+# Teste específico
+pytest tests/test_parser.py -v
+```
 
 ---
 
-## ⚙️ Configuração (.env)
+## 📝 Variáveis de Ambiente
+
+### Obrigatórias
 
 ```env
-# WooCommerce API
 WOO_URL=https://sualoja.com.br
-WOO_CONSUMER_KEY=ck_xxxxx
-WOO_CONSUMER_SECRET=cs_xxxxx
+WOO_CONSUMER_KEY=ck_xxx
+WOO_CONSUMER_SECRET=cs_xxx
+```
 
-# Caminhos
-INPUT_DIR=./data/input
-OUTPUT_DIR=./data/output
-DB_PATH=./products.db
+### Imagens (recomendado)
+
+```env
+GOOGLE_API_KEY=AIzaSy...
+GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
+VISION_AI_ENABLED=true
+VISION_MIN_CONFIDENCE=0.6
+```
+
+### Opcionais
+
+```env
+# Discord
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+DISCORD_BOT_TOKEN=MTI...
+
+# Telegram
+TELEGRAM_WEBHOOK_URL=https://api.telegram.org/bot.../sendMessage
 
 # Segurança
 PRICE_GUARD_MAX_VARIATION=40
-ZERO_GHOST_STOCK=false  # CUIDADO!
+DRY_RUN=false
+SYNC_ENABLED=true
 
-# Notificações
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-DISCORD_BOT_TOKEN=seu_token
-DISCORD_CHANNEL_ID=seu_channel_id
+# Dashboard
+DASHBOARD_AUTH_ENABLED=false
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=secret
 ```
 
 ---
 
-## 🐳 Deploy com Docker
+## 🚀 Roadmap Futuro
 
-**Serviços:**
-1. `dashboard` - FastAPI na porta 8080
-2. `bot` - Discord Bot (depende do dashboard)
-
-**Volumes persistentes:**
-- `products.db` - Banco SQLite
-- `logs/` - Logs rotativos
-- `data/input/` - CSVs de entrada
-- `data/output/` - CSVs gerados
-- `last_run_stats.json` - Estatísticas para bot
+| Feature                    | Status       | Prioridade |
+| -------------------------- | ------------ | ---------- |
+| Scraper v3                 | ✅ Concluído | -          |
+| Dashboard falhas           | ✅ Concluído | -          |
+| Integração CSV + Images    | ✅ Concluído | -          |
+| Upload manual de imagens   | 🔜 Próximo   | Alta       |
+| Webhook estoque tempo real | 🔜 Próximo   | Média      |
+| Gráficos de vendas         | 💭 Planejado | Baixa      |
 
 ---
 
-## 🔴 Status das Melhorias (v2.1)
+## 📞 Suporte
 
-### ✅ Implementado
-
-| Item | Status | Descrição |
-|------|--------|-----------|
-| Agendamento APScheduler | ✅ | `AsyncIOScheduler` integrado no dashboard |
-| Testes automatizados | ✅ | ~50 testes com pytest |
-| Tratamento de erros | ✅ | `WooCommerceError`, `ParserError` com retry inteligente |
-| Dashboard autenticação | ✅ | HTTP Basic Auth configurável |
-| Logs estruturados | ✅ | `JSONFormatter` para produção |
-| Métricas/monitoring | ✅ | Endpoint `/metrics` |
-| Whitelist automática | ✅ | Refresh semanal via scheduler |
-| Descrições SEO | ✅ | Templates por categoria (Pet, Vet, Aquarismo, etc) |
-| Interface mobile | ✅ | CSS responsivo (4 breakpoints) |
-| Histórico de preços | ✅ | Tabela `price_history` no SQLite |
-| Documentação API | ✅ | `/docs` (Swagger) e `/redoc` |
-| Validação CSV | ✅ | ParserError com contexto de linha/arquivo |
-| Cache de marcas | ✅ | `config/brands.json` editável |
-| Backup para Cloud | ✅ | Via rclone (Google Drive, OneDrive, S3, etc) |
-
-### ⏸️ Pendente
-
-| Item | Motivo |
-|------|--------|
-| Suporte multi-loja | Requer redesign do banco de dados |
+- **Logs:** `logs/sync_*.log` e `logs/scraper_full.log`
+- **Erros:** Verificar `get_errors` no dashboard
+- **Discord:** Bot responde `!status` e `!ajuda`
 
 ---
 
-## 📊 Dependências Principais
-
-| Pacote | Versão | Uso |
-|--------|--------|-----|
-| `woocommerce` | ≥3.0.0 | API WooCommerce |
-| `pydantic` | ≥2.0.0 | Validação de dados |
-| `pydantic-settings` | ≥2.0.0 | Configuração via .env |
-| `fastapi` | ≥0.104.0 | Dashboard web |
-| `uvicorn` | ≥0.24.0 | ASGI server |
-| `py-cord` | ≥2.4.0 | Discord bot |
-| `httpx` | ≥0.25.0 | HTTP client async |
-| `jinja2` | ≥3.1.0 | Templates |
-| `apscheduler` | ≥3.10.0 | Agendamento (não usado ainda) |
-
----
-
-## 📝 Convenções de Código
-
-- **Linguagem:** Português (nomes de variáveis misturados pt/en)
-- **Docstrings:** Inglês
-- **Logs:** Português com emojis
-- **Commits:** Não padronizado
-- **Tipo de hints:** Sim (Python 3.9+)
-- **Linter:** Nenhum configurado (recomendado: ruff ou black)
-
----
-
-## 🔗 Referências Importantes
-
-- **README.md** - Documentação para usuário final
-- **DEPLOY.md** - Guia de deploy Proxmox/Docker
-- **main.py** - Todos os modos de execução CLI
-- **bot_control.py** - Comandos Discord disponíveis
-
----
-
-> 💡 **Dica:** Para qualquer modificação, comece lendo este arquivo e os models em `src/models.py` para entender a estrutura de dados.
+_Documento gerado automaticamente - v3.0_

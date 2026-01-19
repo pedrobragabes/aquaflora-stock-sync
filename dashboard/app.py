@@ -700,6 +700,129 @@ async def api_image_stats():
         return {"pending_count": 0, "curated_count": 0, "uploaded_count": 0}
 
 
+@app.get("/api/images/missing")
+async def api_images_missing(limit: int = 100, stock_only: bool = True):
+    """
+    Get products that are missing images for manual upload.
+    
+    Returns list of products without images, prioritized by stock quantity.
+    Use this to identify which products need manual image upload.
+    """
+    import csv
+    
+    try:
+        # Load products from CSV
+        input_file = Path("data/input/Athos.csv")
+        image_dir = Path("data/images")
+        progress_file = Path("data/scraper_progress.json")
+        
+        if not input_file.exists():
+            return {"error": "Input file not found", "missing": []}
+        
+        # Load scraper progress for failure reasons
+        failed_skus = set()
+        if progress_file.exists():
+            with open(progress_file, 'r', encoding='utf-8') as f:
+                progress = json.load(f)
+                failed_skus = set(progress.get('failed', []))
+        
+        with open(input_file, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f, delimiter=';')
+            products = list(reader)
+        
+        # Find products without images
+        missing = []
+        for p in products:
+            sku = p.get('CodigoBarras', '')
+            if not sku or len(sku) < 5:
+                continue
+            
+            image_path = image_dir / f"{sku}.jpg"
+            if not image_path.exists():
+                try:
+                    stock = float(p.get('Estoque', '0').replace(',', '.'))
+                except:
+                    stock = 0
+                
+                # Skip if stock_only and no stock
+                if stock_only and stock <= 0:
+                    continue
+                
+                missing.append({
+                    "sku": sku,
+                    "name": p.get('Descricao', '')[:60],
+                    "brand": p.get('Marca', ''),
+                    "department": p.get('Departamento', ''),
+                    "stock": stock,
+                    "failed_scraper": sku in failed_skus,
+                })
+        
+        # Sort by stock descending
+        missing.sort(key=lambda x: x['stock'], reverse=True)
+        
+        return {
+            "total_missing": len(missing),
+            "showing": min(limit, len(missing)),
+            "stock_only": stock_only,
+            "missing": missing[:limit]
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get missing images: {e}")
+        return {"error": str(e), "missing": []}
+
+
+@app.get("/api/images/scraper-progress")
+async def api_scraper_progress():
+    """Get image scraper progress and statistics."""
+    try:
+        progress_file = Path("data/scraper_progress.json")
+        cache_file = Path("data/vision_cache.json")
+        image_dir = Path("data/images")
+        
+        result = {
+            "status": "not_started",
+            "images_downloaded": 0,
+            "success": 0,
+            "failed": 0,
+            "excluded": 0,
+            "reused": 0,
+            "cache_entries": 0,
+            "avg_score": 0,
+            "elapsed_minutes": 0,
+        }
+        
+        # Count actual images
+        if image_dir.exists():
+            result["images_downloaded"] = len(list(image_dir.glob("*.jpg")))
+        
+        # Load progress
+        if progress_file.exists():
+            with open(progress_file, 'r', encoding='utf-8') as f:
+                progress = json.load(f)
+            
+            stats = progress.get('stats', {})
+            result["status"] = "completed" if stats.get('total_processed', 0) > 0 else "in_progress"
+            result["success"] = stats.get('total_success', 0)
+            result["failed"] = stats.get('total_failed', 0)
+            result["excluded"] = stats.get('total_excluded', 0)
+            result["reused"] = stats.get('total_reused', 0)
+            result["avg_score"] = round(stats.get('avg_vision_score', 0), 2)
+            result["elapsed_minutes"] = round(progress.get('elapsed_seconds', 0) / 60, 1)
+        
+        # Load cache size
+        if cache_file.exists():
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            result["cache_entries"] = len(cache)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to get scraper progress: {e}")
+        return {"error": str(e)}
+
+
 # =============================================================================
 # RUN SERVER
 # =============================================================================

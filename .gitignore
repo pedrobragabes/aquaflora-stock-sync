@@ -57,11 +57,14 @@ logs/*
 !logs/.gitkeep
 *.log
 
-# Data folders - ignore CSVs but keep directory structure
+# Data folders - ignore CSVs and images but keep directory structure
 data/output/*
 !data/output/.gitkeep
 data/input/*
 !data/input/.gitkeep
+data/images/*
+!data/images/.gitkeep
+data/scraper_progress.json
 
 # Credentials (NEVER commit!)
 *.pem

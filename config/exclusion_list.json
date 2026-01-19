@@ -1,0 +1,116 @@
+{
+  "_comment": "Lista de exclusão de produtos para e-commerce AquaFlora",
+  "_updated": "2026-01-19",
+  "_strategy": "Menos é mais! Foco em produtos de alta margem e fácil envio",
+  
+  "exclude_departments": [
+    "FERRAMENTAS",
+    "INSUMO"
+  ],
+  
+  "exclude_keywords": {
+    "pereciveis": [
+      "isca viva",
+      "minhoca viva",
+      "peixe vivo",
+      "congelado",
+      "resfriado"
+    ],
+    "bebidas": [
+      "cerveja",
+      "vinho",
+      "agua mineral",
+      "refrigerante",
+      "suco"
+    ],
+    "tabaco_fumo": [
+      "cigarro",
+      "fumo de corda",
+      "tabaco",
+      "charuto"
+    ],
+    "muito_pesados": [
+      "25kg",
+      "50kg",
+      "saco 25",
+      "saco 50",
+      "40kg",
+      "20kg",
+      "15kg",
+      "saco 20",
+      "saco 15"
+    ],
+    "dificil_embalar": [
+      "arame farpado",
+      "cano pvc",
+      "barra de ferro",
+      "motor bomba",
+      "aparador de grama",
+      "escada",
+      "tela soldada",
+      "mourão"
+    ],
+    "decoracao_aquario": [
+      "pedra dolomita",
+      "pedra rolada",
+      "cascalho",
+      "substrato",
+      "rocha viva",
+      "tronco aquario",
+      "enfeite aquario",
+      "planta artificial aquario",
+      "decoração aquario",
+      "coral artificial",
+      "fundo aquario"
+    ],
+    "itens_pequenos_baixa_margem": [
+      "anzol avulso",
+      "miçanga",
+      "contas",
+      "presilha",
+      "argola pequena",
+      "miudeza",
+      "acessorio pequeno",
+      "rebite",
+      "ilhós",
+      "botao",
+      "pedra nº0",
+      "pedra nº1",
+      "pedra nº2"
+    ],
+    "volume_baixo_valor": [
+      "boia isopor",
+      "rolha cortiça",
+      "elastico",
+      "barbante",
+      "fitilho"
+    ],
+    "frageis_quebraveis": [
+      "vidro aquario",
+      "lampada",
+      "termometro vidro",
+      "ampola"
+    ],
+    "sem_imagem_util": [
+      "refil",
+      "reposicao",
+      "kit montagem",
+      "peça reposição"
+    ]
+  },
+  
+  "exclude_skus": [],
+  
+  "max_weight_kg": 15.0,
+  
+  "notes": {
+    "ferramentas": "122 produtos - Pesado, volumoso, frete caro.",
+    "insumo": "72 produtos - Adubos, sacos pesados.",
+    "decoracao": "Pedras, substrato - peso, dificuldade imagem, baixa margem.",
+    "pequenos": "Anzóis avulsos, miçangas - não compensa frete individual.",
+    "pereciveis": "Isca viva - impossível enviar.",
+    "bebidas": "Cerveja - quebra, peso, legislação.",
+    "muito_pesados": "Sacos acima de 15kg - frete inviável.",
+    "estrategia": "Menos produtos = melhor curadoria = mais vendas!"
+  }
+}
