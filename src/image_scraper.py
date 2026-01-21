@@ -62,14 +62,14 @@ GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "")
 VISION_AI_ENABLED = os.getenv("VISION_AI_ENABLED", "true").lower() == "true"
 VISION_MIN_CONFIDENCE = float(os.getenv("VISION_MIN_CONFIDENCE", "0.6"))
 
-# Default configuration values
-MIN_IMAGE_SIZE = 400  # Reduced from 600 to allow more flexibility
-MAX_DIMENSION = 1200  # Maximum dimension (will resize if larger)
-JPEG_QUALITY = 85
+# Default configuration values (can be overridden via .env)
+MIN_IMAGE_SIZE = int(os.getenv("IMAGE_MIN_SIZE", "300"))  # Minimum dimension (width or height)
+MAX_DIMENSION = int(os.getenv("IMAGE_MAX_DIMENSION", "1200"))  # Maximum dimension (will resize if larger)
+JPEG_QUALITY = int(os.getenv("IMAGE_JPEG_QUALITY", "85"))
 TIMEOUT_SECONDS = 15
 SLEEP_MIN = 0.3
 SLEEP_MAX = 1.0
-MAX_FILE_SIZE_KB = 5  # Minimum file size to be valid
+MAX_FILE_SIZE_KB = 3  # Minimum file size to be valid (lowered from 5)
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -121,41 +121,108 @@ class VisionAnalysisResult:
 def clean_product_name(name: str) -> str:
     """
     Clean product name for search queries.
-    Removes promotional text, special characters, and normalizes whitespace.
+    Removes promotional text, codes, special characters, and normalizes whitespace.
     
-    Reused from: Scraping Images Old/src/scraper.py
+    Enhanced to produce better search queries.
     """
     if not name:
         return ""
     
+    s = name
+    
+    # Remove códigos de produto entre parênteses ou colchetes (ex: "(ABC123)" ou "[REF-456]")
+    s = re.sub(r"[\(\[][^\)\]]*[\)\]]", " ", s)
+    
+    # Remove códigos alfanuméricos longos (provavelmente SKUs internos)
+    s = re.sub(r"\b[A-Z]{2,}\d{3,}\b", " ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\b\d{5,}\b", " ", s)  # Números muito longos
+    
     # Stopwords to remove (promotional text)
     stopwords = [
         r"\b(promoção|promocao|oferta|off|desconto|frete grátis|frete gratis)\b",
-        r"\b(novo|lançamento|lancamento)\b",
+        r"\b(novo|lançamento|lancamento|novidade|exclusivo)\b",
         r"\b(\d+%\s*off)\b",
-        r"[!@#$*]",
+        r"\b(unidade|un\.|pç\.|pc\.|pcs|und|kit\s*c/|c/\s*\d+)\b",
+        r"\b(ref\.|ref:|cod\.|cod:|código|codigo)\b",
+        r"\b(atacado|varejo|revenda)\b",
+        r"\b(pronta entrega|disponível|disponivel|em estoque)\b",
     ]
     
-    s = name.lower()
+    s = s.lower()
     for pat in stopwords:
         s = re.sub(pat, " ", s, flags=re.IGNORECASE)
     
-    return re.sub(r"\s+", " ", s).strip()
+    # Remove caracteres especiais mas mantém hífen e espaço
+    s = re.sub(r"[!@#$%^&*()_+=\[\]{}|\\;:'\",.<>?/~`]", " ", s)
+    
+    # Normaliza espaços
+    s = re.sub(r"\s+", " ", s).strip()
+    
+    # Limita a 8 palavras para evitar queries muito longas
+    words = s.split()
+    if len(words) > 8:
+        s = " ".join(words[:8])
+    
+    return s
+
+
+# Domínios conhecidos por retornar imagens ruins/irrelevantes
+BLOCKED_DOMAINS = [
+    "reddit.com", "redd.it", "imgur.com",
+    "facebook.com", "fbcdn.net", "instagram.com", "cdninstagram.com",
+    "twitter.com", "twimg.com", "x.com",
+    "pinterest.com", "pinimg.com",
+    "tiktok.com", "tiktokcdn.com",
+    "youtube.com", "ytimg.com",
+    "wikipedia.org", "wikimedia.org",
+    "stock", "shutterstock", "gettyimages", "istockphoto", "depositphotos",
+    "aliexpress", "alibaba", "dhgate", "wish.com", "banggood",
+    "ebay.com", "olx.", "enjoei.", "mercadolivre",
+    "clipart", "freepik", "flaticon", "vecteezy",
+    "meme", "9gag", "knowyourmeme", "giphy",
+    "blogspot", "wordpress.com", "medium.com",
+    "researchgate", "academia.edu", "scielo",
+]
+
+# Tokens que indicam imagens ruins
+BAD_URL_TOKENS = [
+    "sprite", "icon", "logo", "placeholder", "blank",
+    "spinner", "loading", "1x1", "pixel", "favicon", "avatar",
+    "banner", "ad", "advertisement", "tracking", "analytics",
+    "thumbnail", "thumb_", "_thumb", "small_", "_small",
+    "preview", "watermark", "sample", "demo",
+    "profile", "user_", "avatar_", "emoji", "sticker",
+    "meme", "funny", "joke", "humor", "reddit",
+    "screenshot", "screen_", "capture", "print",
+    "map", "chart", "graph", "diagram", "infographic",
+]
 
 
 def is_bad_image_url(url: str) -> bool:
     """
     Check if URL is likely a bad image (placeholder, logo, etc).
     
-    Reused from: Scraping Images Old/src/scraper.py
+    Enhanced with domain blocking and better token detection.
     """
-    bad_tokens = [
-        "sprite", "icon", "logo", "placeholder", "blank",
-        "spinner", "loading", "1x1", "pixel", "favicon", "avatar",
-        "banner", "ad", "advertisement", "tracking", "analytics"
-    ]
     u = url.lower()
-    return any(tok in u for tok in bad_tokens)
+    
+    # Check blocked domains
+    for domain in BLOCKED_DOMAINS:
+        if domain in u:
+            logger.debug(f"Blocked domain detected: {domain} in {url[:50]}")
+            return True
+    
+    # Check bad tokens
+    if any(tok in u for tok in BAD_URL_TOKENS):
+        return True
+    
+    # Bloquear extensões de arquivo suspeitas
+    if any(ext in u for ext in [".gif", ".svg", ".ico", ".bmp", ".webp"]):
+        # WebP pode ser OK, mas outros são suspeitos
+        if ".gif" in u or ".svg" in u or ".ico" in u:
+            return True
+    
+    return False
 
 
 # =============================================================================
@@ -171,6 +238,56 @@ def random_headers() -> dict:
         "Referer": "https://www.google.com/",
         "Connection": "keep-alive",
     }
+
+
+def build_search_query(product_name: str, category: str = "", sku: str = "") -> str:
+    """
+    Build an optimized search query for finding product images.
+    
+    Adds relevant context keywords to improve search accuracy.
+    """
+    clean_name = clean_product_name(product_name)
+    
+    if not clean_name:
+        return ""
+    
+    # Palavras-chave de contexto por categoria
+    CATEGORY_CONTEXT = {
+        "pesca": "pesca produto",
+        "pet": "pet shop produto",
+        "racao": "ração pet",
+        "farmacia": "veterinário produto",
+        "aquarismo": "aquário produto",
+        "passaros": "pássaro produto",
+        "aves": "ave criação",
+        "piscina": "piscina produto",
+        "cutelaria": "faca produto",
+        "ferramentas": "ferramenta",
+        "tabacaria": "tabacaria",
+        "geral": "",
+    }
+    
+    # Adiciona contexto da categoria
+    context = ""
+    if category:
+        cat_lower = category.lower()
+        for cat_key, cat_context in CATEGORY_CONTEXT.items():
+            if cat_key in cat_lower:
+                context = cat_context
+                break
+    
+    # Monta a query
+    query_parts = [clean_name]
+    
+    # Adiciona contexto se não for muito longo
+    if context and len(clean_name.split()) < 5:
+        query_parts.append(context)
+    
+    # Adiciona "produto" para ajudar a filtrar memes/imagens aleatórias
+    if "produto" not in clean_name and len(clean_name.split()) < 4:
+        query_parts.append("produto")
+    
+    return " ".join(query_parts)
 
 
 # =============================================================================
@@ -243,7 +360,7 @@ def analyze_image_with_vision(
             }]
         }
         
-        resp = requests.post(url, json=payload, timeout=30)
+        resp = requests.post(url, json=payload, timeout=15)  # 15s timeout to avoid hanging
         
         if resp.status_code != 200:
             logger.warning(f"Vision AI error: {resp.status_code} - {resp.text[:200]}")
@@ -589,19 +706,42 @@ def _calculate_product_score(
             score += min(matching_labels * 0.1, 0.2)
     
     # =======================================================================
-    # NEGATIVE INDICATORS - Labels that suggest bad images
+    # NEGATIVE INDICATORS - Labels que indicam imagens ruins/irrelevantes
     # =======================================================================
+    # Labels que SEMPRE indicam imagens ruins
+    HARD_REJECT_LABELS = [
+        "meme", "screenshot", "comic", "manga", "anime",
+        "selfie", "portrait", "crowd", "audience", "concert",
+        "map", "chart", "diagram", "graph", "infographic",
+        "news", "article", "newspaper", "magazine",
+        "movie", "film", "scene", "actor", "actress",
+        "game", "gaming", "video game", "esports",
+        "art", "painting", "sculpture", "museum",
+        "landscape", "mountain", "beach", "sunset", "nature scene",
+        "geology", "geological", "topography", "terrain", "satellite",
+        "city", "building", "architecture", "skyline",
+    ]
+    
+    # Se algum label de rejeição forte foi detectado, penaliza muito
+    hard_reject_matches = sum(1 for label in labels if any(hr in label for hr in HARD_REJECT_LABELS))
+    if hard_reject_matches > 0:
+        score -= 0.5  # Penalidade severa
+        logger.debug(f"Hard reject labels found in {labels[:5]}")
+    
+    # Labels que sugerem má qualidade (mas não rejeitam automaticamente)
     negative_labels = [
-        "screenshot", "text", "document", "website", "webpage",
-        "collage", "meme", "cartoon", "illustration", "drawing",
-        "person", "people", "human", "face", "selfie",
+        "text", "document", "website", "webpage",
+        "collage", "cartoon", "illustration", "drawing",
+        "person", "people", "human", "face", "group",
         "advertisement", "banner", "poster", "flyer",
-        "stock photo", "watermark",
+        "stock photo", "watermark", "logo",
+        "event", "party", "celebration",
+        "social media", "post", "content",
     ]
     
     # Check negative labels
     negative_matches = sum(1 for label in labels if any(n in label for n in negative_labels))
-    score -= min(negative_matches * 0.15, 0.4)  # Up to -0.4
+    score -= min(negative_matches * 0.12, 0.35)  # Up to -0.35
     
     # =======================================================================
     # MISMATCH DETECTION - Detect clearly wrong product types
@@ -618,6 +758,27 @@ def _calculate_product_score(
         if wrong_matches > 0:
             score -= 0.3 * wrong_matches
             logger.debug(f"Hardware product showing wrong labels: {labels[:5]}")
+    
+    # =======================================================================
+    # UNIVERSAL MISMATCH - Detectar tipos de imagem claramente errados
+    # =======================================================================
+    # Se não é um produto de pet mas tem "dog", "cat" como label principal
+    pet_keywords = ["pet", "cachorro", "gato", "cao", "racao", "comedouro", "coleira"]
+    is_pet_product = any(kw in product_lower for kw in pet_keywords)
+    
+    if not is_pet_product:
+        # Se a imagem mostra animal mas não é produto pet, provavelmente é meme/foto random
+        animal_as_subject = ["dog", "cat", "puppy", "kitten", "pet"]
+        if any(label in animal_as_subject for label in labels[:3]):
+            score -= 0.3
+            logger.debug(f"Animal detected for non-pet product: {labels[:3]}")
+    
+    # Detectar imagens de geologia/mapas (como a imagem do R2 lake/Violão Lake)
+    geology_labels = ["geology", "topography", "satellite", "aerial", "map", "terrain", 
+                      "landscape", "mountain", "lake", "river", "forest", "vegetation"]
+    if sum(1 for label in labels if any(g in label.lower() for g in geology_labels)) >= 2:
+        score -= 0.5
+        logger.debug(f"Geology/landscape image detected: {labels[:5]}")
     
     # =======================================================================
     # POSITIVE INDICATORS (generic, only if no semantic validation)
@@ -730,16 +891,13 @@ def search_images_google(
         return []
     
     candidates = []
-    clean_name = clean_product_name(product_name)
     
-    if not clean_name:
+    # Build optimized query
+    query = build_search_query(product_name, category, sku)
+    
+    if not query or len(query) < 3:
+        logger.warning(f"Query too short after cleaning: {product_name}")
         return []
-    
-    # Build query - product name + category for better results
-    if category and category != "SEM_CATEGORIA":
-        query = f"{clean_name} {category}"
-    else:
-        query = clean_name
     
     try:
         time.sleep(random.uniform(SLEEP_MIN, SLEEP_MAX))
@@ -751,10 +909,13 @@ def search_images_google(
             "cx": GOOGLE_SEARCH_ENGINE_ID,
             "q": query,
             "searchType": "image",
-            "num": min(max_results * 2, 10),  # Fetch more to filter
+            "num": min(max_results * 3, 10),  # Fetch more to filter bad ones
             "imgSize": "large",
             "imgType": "photo",
             "safe": "off",
+            # Excluir sites de redes sociais (ajuda a evitar memes)
+            "siteSearchFilter": "e",  # exclude
+            "siteSearch": "reddit.com OR twitter.com OR facebook.com OR instagram.com OR pinterest.com",
         }
         
         resp = requests.get(url, params=params, timeout=TIMEOUT_SECONDS)
@@ -810,10 +971,9 @@ def search_images_duckduckgo(
     Search images using DuckDuckGo.
     
     Strategy (in order of specificity):
-    1. Product name + SKU
-    2. Product name + category
-    3. EAN barcode (if available)
-    4. Just product name
+    1. Optimized query with context
+    2. EAN barcode (if available)
+    3. Basic product name + "produto"
     """
     if not HAS_DDGS:
         logger.warning("duckduckgo-search not installed, skipping DuckDuckGo search")
@@ -822,20 +982,20 @@ def search_images_duckduckgo(
     candidates = []
     queries = []
     
-    clean_name = clean_product_name(product_name)
+    # Build optimized query first
+    optimized_query = build_search_query(product_name, category, sku)
+    if optimized_query and len(optimized_query) >= 5:
+        queries.append(optimized_query)
     
-    # Build query list in order of preference
-    if clean_name and sku:
-        queries.append(f"{clean_name} {sku}")
-    
-    if clean_name and category:
-        queries.append(f"{clean_name} {category}")
-    
+    # EAN como segunda opção
     if ean and len(ean) >= 8:
-        queries.append(f'"{ean}"')
+        queries.append(f'"{ean}" produto')
     
+    # Query básica como fallback
+    clean_name = clean_product_name(product_name)
     if clean_name and len(clean_name) >= 5:
-        queries.append(clean_name)
+        # Adiciona "produto" para evitar imagens aleatórias
+        queries.append(f"{clean_name} produto")
     
     # Try each query until we find results
     for query in queries:

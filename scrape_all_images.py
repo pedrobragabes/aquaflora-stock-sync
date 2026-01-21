@@ -23,9 +23,12 @@ import csv
 import hashlib
 import json
 import logging
+import os
 import shutil
+import signal
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -68,10 +71,14 @@ LOG_FILE = Path("logs/scraper_full.log")
 MIN_VISION_SCORE = 0.35  # Departamentos difíceis (FARMACIA, GERAL, TABACARIA, PISCINA)
 MIN_SCORE_STRICT = 0.45  # Departamentos com boas imagens (PET, RACAO, PESCA)
 
+# Vision AI - lê do .env (VISION_AI_ENABLED)
+USE_VISION_AI = os.getenv("VISION_AI_ENABLED", "true").lower() == "true"
+
 # Rate limiting
 MAX_CONCURRENT = 3  # Parallel requests (conservative for API limits)
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 2  # seconds
+PRODUCT_TIMEOUT = 60  # Max seconds per product before skipping
 
 # Departments where lower scores are acceptable (hard to find product images)
 LENIENT_DEPARTMENTS = ["FARMACIA", "GERAL", "TABACARIA", "PISCINA", "AVES", "CUTELARIA"]
@@ -152,21 +159,33 @@ vision_cache = VisionCache(VISION_CACHE_FILE)
 # [4] RETRY WITH BACKOFF (sync version for compatibility)
 # =============================================================================
 
-def download_with_retry(url: str, max_retries: int = MAX_RETRIES) -> Optional[bytes]:
-    """Download image with exponential backoff retry."""
+def download_with_retry(url: str, max_retries: int = MAX_RETRIES, timeout: int = 10) -> Optional[bytes]:
+    """Download image with exponential backoff retry and strict timeout."""
     import requests
     
     for attempt in range(max_retries):
         try:
-            content = download_image(url)
-            if content:
-                return content
+            # Download com timeout agressivo para não travar
+            response = requests.get(
+                url,
+                timeout=timeout,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"},
+                stream=True
+            )
+            if response.status_code == 200:
+                content = response.content
+                if content and len(content) > 5000:  # Mínimo 5KB
+                    return content
             
-            # If download returned None, might be rate limit
+            # If download failed, might be rate limit
             if attempt < max_retries - 1:
                 delay = RETRY_BASE_DELAY * (2 ** attempt)
                 time.sleep(delay)
                 
+        except requests.exceptions.Timeout:
+            logger.debug(f"Timeout downloading {url[:50]}...")
+            if attempt < max_retries - 1:
+                time.sleep(1)
         except Exception as e:
             logger.debug(f"Download error: {e}")
             if attempt < max_retries - 1:
@@ -242,29 +261,31 @@ def process_single_product(product: dict, name_to_sku: dict) -> Tuple[str, bool,
     best_result = None
     
     for candidate in candidates:
-        # Check cache first [2]
-        cached = vision_cache.get(candidate.url)
-        if cached:
-            if cached['score'] > best_score and cached['safe_search_ok']:
-                # Download the cached good image
-                content = download_with_retry(candidate.url)
-                if content:
-                    is_valid, _, _ = validate_image(content)
-                    if is_valid:
-                        best_content = content
-                        best_score = cached['score']
-                        best_result = VisionAnalysisResult(
-                            is_valid=True,
-                            score=cached['score'],
-                            labels=cached['labels'],
-                            is_product_image=cached['is_product_image'],
-                            has_text=False, has_logo=False,
-                            safe_search_ok=cached['safe_search_ok'],
-                            dominant_colors=[]
-                        )
-                        if best_score >= 0.8:
-                            break
-            continue
+        # Skip cache check when Vision AI is disabled
+        if USE_VISION_AI:
+            # Check cache first [2]
+            cached = vision_cache.get(candidate.url)
+            if cached:
+                if cached['score'] > best_score and cached['safe_search_ok']:
+                    # Download the cached good image
+                    content = download_with_retry(candidate.url)
+                    if content:
+                        is_valid, _, _ = validate_image(content)
+                        if is_valid:
+                            best_content = content
+                            best_score = cached['score']
+                            best_result = VisionAnalysisResult(
+                                is_valid=True,
+                                score=cached['score'],
+                                labels=cached['labels'],
+                                is_product_image=cached['is_product_image'],
+                                has_text=False, has_logo=False,
+                                safe_search_ok=cached['safe_search_ok'],
+                                dominant_colors=[]
+                            )
+                            if best_score >= 0.8:
+                                break
+                continue
         
         # Download with retry [4]
         content = download_with_retry(candidate.url)
@@ -276,8 +297,8 @@ def process_single_product(product: dict, name_to_sku: dict) -> Tuple[str, bool,
         if not is_valid:
             continue
         
-        # Vision AI analysis
-        if VISION_AI_ENABLED and GOOGLE_API_KEY:
+        # Vision AI analysis (DISABLED - accept first valid image)
+        if USE_VISION_AI and VISION_AI_ENABLED and GOOGLE_API_KEY:
             result = analyze_image_with_vision(content, name, dept)
             
             # Cache the result [2]
@@ -297,13 +318,15 @@ def process_single_product(product: dict, name_to_sku: dict) -> Tuple[str, bool,
                 logger.info(f"   🎯 Excellent image found!")
                 break
         else:
+            # Vision AI desativado - aceita primeira imagem válida
             best_content = content
-            best_score = 0.5
+            best_score = 1.0  # Score fixo (sem validação)
             best_result = VisionAnalysisResult(
-                is_valid=True, score=0.5, labels=[], is_product_image=True,
+                is_valid=True, score=1.0, labels=["no_vision"], is_product_image=True,
                 has_text=False, has_logo=False, safe_search_ok=True,
                 dominant_colors=[]
             )
+            logger.info(f"   ✅ Imagem aceita (Vision AI desativado)")
             break
     
     # Dynamic threshold based on department
@@ -551,6 +574,9 @@ def run_scraper(stock_only: bool = False, limit: Optional[int] = None, reset: bo
     start_time = time.time()
     
     try:
+        # Thread executor for timeout per product
+        executor = ThreadPoolExecutor(max_workers=1)
+        
         for i, product in enumerate(to_process):
             sku = product.get('CodigoBarras', '')
             name = product.get('Descricao', '')
@@ -558,17 +584,29 @@ def run_scraper(stock_only: bool = False, limit: Optional[int] = None, reset: bo
             
             logger.info(f"[{i+1}/{len(to_process)}] 🔍 {sku} - {name[:40]}... (stock: {stock})")
             
-            sku_result, success, score = process_single_product(product, name_to_sku)
-            
-            if success:
-                logger.info(f"   ✅ OK (score: {score:.2f})")
-                progress['completed'].append(sku)
-                progress['stats']['total_success'] += 1
-                vision_scores.append(score)
-                name_to_sku[name] = sku
-                progress['name_to_sku'] = name_to_sku
-            else:
-                logger.warning(f"   ❌ FAIL")
+            try:
+                # Execute with timeout to prevent hanging
+                future = executor.submit(process_single_product, product, name_to_sku)
+                sku_result, success, score = future.result(timeout=PRODUCT_TIMEOUT)
+                
+                if success:
+                    logger.info(f"   ✅ OK (score: {score:.2f})")
+                    progress['completed'].append(sku)
+                    progress['stats']['total_success'] += 1
+                    vision_scores.append(score)
+                    name_to_sku[name] = sku
+                    progress['name_to_sku'] = name_to_sku
+                else:
+                    logger.warning(f"   ❌ FAIL")
+                    progress['failed'].append(sku)
+                    progress['stats']['total_failed'] += 1
+                    
+            except FuturesTimeoutError:
+                logger.error(f"   ⏰ TIMEOUT (>{PRODUCT_TIMEOUT}s) - skipping")
+                progress['failed'].append(sku)
+                progress['stats']['total_failed'] += 1
+            except Exception as e:
+                logger.error(f"   💥 ERROR: {e}")
                 progress['failed'].append(sku)
                 progress['stats']['total_failed'] += 1
             
@@ -583,6 +621,8 @@ def run_scraper(stock_only: bool = False, limit: Optional[int] = None, reset: bo
                 
             # Small delay to respect rate limits
             time.sleep(0.3)
+        
+        executor.shutdown(wait=False)
             
     except KeyboardInterrupt:
         logger.warning("\n⚠️  Interrupted! Saving progress...")
