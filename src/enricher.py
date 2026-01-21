@@ -260,8 +260,19 @@ class ProductEnricher:
         # Format name
         formatted_name = self._format_name(raw.name)
         
-        # Detect brand
-        brand = self._detect_brand(raw.name)
+        # Detect brand - PRIORIDADE: usar marca do CSV, senão detectar
+        brand = None
+        if raw.brand and raw.brand.upper() not in ('', 'DIVERSAS', 'SEM MARCA', 'N/A'):
+            # Usar marca do CSV, formatada corretamente
+            brand = self._format_brand_name(raw.brand)
+        
+        if not brand:
+            # Tentar detectar no nome
+            brand = self._detect_brand(raw.name)
+        
+        # INCLUIR MARCA NO TÍTULO se não estiver
+        if brand and brand.upper() not in formatted_name.upper():
+            formatted_name = f"{formatted_name} - {brand}"
         
         # Extract weight
         weight = self._extract_weight(raw.name)
@@ -295,6 +306,19 @@ class ProductEnricher:
             tags=tags,
             published=raw.stock > 0,
         )
+    
+    def _format_brand_name(self, brand: str) -> str:
+        """Format brand name from CSV to proper case."""
+        if not brand:
+            return ""
+        
+        # Se já conhecemos essa marca, usar o nome correto
+        brand_lower = brand.lower().strip()
+        if brand_lower in KNOWN_BRANDS:
+            return KNOWN_BRANDS[brand_lower]
+        
+        # Senão, formatar em Title Case
+        return brand.strip().title()
     
     def _detect_brand(self, name: str) -> Optional[str]:
         """Detect brand from product name using pattern matching."""

@@ -1,6 +1,6 @@
-# AquaFlora Stock Sync v3.0
+# AquaFlora Stock Sync v3.1
 
-**Sistema completo de sincronização de estoque** - Migra dados do ERP Athos para WooCommerce com imagens automáticas via IA.
+**Sistema completo de sincronização de estoque** - Migra dados do ERP Athos para WooCommerce com imagens automáticas via IA e upload FTP.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Dashboard-green.svg)
@@ -14,11 +14,12 @@
 Sistema completo para e-commerce que:
 
 1. **Lê CSV do ERP Athos** → Parser inteligente que limpa dados "sujos"
-2. **Enriquece produtos** → Detecta marca, peso, gera SEO
+2. **Enriquece produtos** → Detecta marca (160+), peso, gera SEO
 3. **Busca imagens** → Google Search + Vision AI validation
-4. **Sincroniza WooCommerce** → API segura com PriceGuard
-5. **Dashboard Web** → Controle visual completo
-6. **Bot Discord** → Comandos remotos
+4. **Upload FTP** → Envia imagens para Hostinger
+5. **Exporta CSV WooCommerce** → Formato PT-BR com URLs públicas
+6. **Dashboard Web** → Controle visual completo
+7. **Bot Discord** → Comandos remotos
 
 ---
 
@@ -50,6 +51,13 @@ python scrape_all_images.py
 - `data/scraper_progress.json` - Progresso
 - `data/vision_cache.json` - Cache Vision AI
 
+### Passo 1.5: Upload FTP para Servidor
+
+```powershell
+# Upload de todas imagens para Hostinger
+python -c "from src.image_scraper import upload_images_ftp; upload_images_ftp()"
+```
+
 ### Passo 2: Gerar CSV para WooCommerce
 
 ```powershell
@@ -58,6 +66,9 @@ python main.py --input data/input/Athos.csv
 
 # Modo LITE (só preço e estoque - preserva SEO manual)
 python main.py --input data/input/Athos.csv --lite
+
+# Modo TESTE (apenas PET, PESCA, AQUARISMO - importação rápida)
+python main.py --input data/input/Athos.csv --teste
 ```
 
 **Saídas:**
@@ -86,10 +97,11 @@ Após importação bem-sucedida:
 | Métrica                 | Valor  |
 | ----------------------- | ------ |
 | Produtos no ERP         | 4.352  |
-| Excluídos (digital)     | ~300   |
-| Válidos para e-commerce | ~2.700 |
+| Excluídos (automático)  | ~390   |
+| Válidos para e-commerce | ~3.962 |
 | Departamentos           | 12     |
 | Marcas detectadas       | 160+   |
+| Imagens processadas     | 1.727  |
 | Semânticas Vision AI    | 80+    |
 
 ### Exclusões Automáticas
@@ -102,6 +114,8 @@ Após importação bem-sucedida:
 | Itens pequenos    | Anzol avulso, miçangas       |
 | Perecíveis        | Isca viva                    |
 | Bebidas           | Legislação, quebra           |
+| Frágeis           | Aquário vidro, cerâmica      |
+| Volumosos         | Bebedouro galinha, gaiola    |
 | > 15kg            | Frete inviável               |
 
 ---

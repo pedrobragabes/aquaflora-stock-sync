@@ -1,7 +1,7 @@
-# 📋 Contexto Técnico - AquaFlora Stock Sync v3.0
+# 📋 Contexto Técnico - AquaFlora Stock Sync v3.1
 
 > **Documento de referência para desenvolvimento e manutenção**  
-> Última atualização: 19 Janeiro 2026
+> Última atualização: 21 Janeiro 2026
 
 ---
 
@@ -12,8 +12,9 @@
 1. Importa dados do ERP Athos (CSV)
 2. Enriquece com marca, peso, SEO
 3. Busca imagens automaticamente (Google + Vision AI)
-4. Sincroniza com WooCommerce
-5. Fornece dashboard web e bot Discord
+4. Faz upload FTP para Hostinger
+5. Gera CSV para importação no WooCommerce
+6. Fornece dashboard web e bot Discord
 
 ---
 
@@ -25,8 +26,9 @@
 | Departamentos               | 12     |
 | Marcas detectadas           | 160+   |
 | Semânticas Vision AI        | 80+    |
-| Produtos válidos e-commerce | ~2.700 |
-| Excluídos (automático)      | ~300   |
+| Produtos válidos e-commerce | ~3.962 |
+| Excluídos (automático)      | ~390   |
+| Imagens processadas         | 1.727  |
 
 ---
 
@@ -39,15 +41,15 @@
 └─────────────────┘     └─────────────────┘     └────────┬────────┘
                                                          │
 ┌─────────────────┐     ┌─────────────────┐              │
-│   WooCommerce   │◀────│  WooSyncManager │◀─────────────┘
-│   (API REST)    │     │   (sync.py)     │
+│   WooCommerce   │◀────│  CSV Export     │◀─────────────┘
+│   (Import CSV)  │     │   (main.py)     │
 └─────────────────┘     └─────────────────┘
          ▲
          │
-┌────────┴────────┐     ┌─────────────────┐
-│  Image Scraper  │────▶│   Vision AI     │
-│ (scrape_all_images)   │ (image_scraper) │
-└─────────────────┘     └─────────────────┘
+┌────────┴────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Image Scraper  │────▶│   Vision AI     │────▶│   FTP Upload    │
+│ (scrape_all_images)   │ (image_scraper) │     │   (Hostinger)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
 ---
@@ -78,11 +80,21 @@
 
 ### Configurações config/
 
-| Arquivo               | Conteúdo                         |
-| --------------------- | -------------------------------- |
-| `settings.py`         | Pydantic Settings (carrega .env) |
-| `brands.json`         | Lista de 160+ marcas             |
-| `exclusion_list.json` | Exclusões para e-commerce        |
+| Arquivo               | Conteúdo                            |
+| --------------------- | ----------------------------------- |
+| `settings.py`         | Pydantic Settings (carrega .env)    |
+| `brands.json`         | Lista de 160+ marcas                |
+| `exclusion_list.json` | Exclusões completas para e-commerce |
+
+### Scripts (pasta scripts/)
+
+| Script                       | Função                                  |
+| ---------------------------- | --------------------------------------- |
+| `analyze_departments.py`     | Analisa departamentos do ERP            |
+| `analyze_geral_pesca.py`     | Análise específica dept Geral Pesca     |
+| `analyze_missing_images.py`  | Lista produtos sem imagem               |
+| `test_image_scraper.py`      | Testa scraper em produtos específicos   |
+| `run_scraper_background.ps1` | Roda scraper em background (PowerShell) |
 
 ---
 
@@ -131,34 +143,63 @@ EnrichedProduct:
   - name: "Sachê Special Dog Carne 100g"
   - brand: "Special Dog"
   - weight_kg: 0.1
-  - category: "Ração > Cachorro > Úmida"
+  - category: "Pet"
   - description: "<div>...</div>"  # HTML com emojis
 ```
 
-### 3. WooSyncManager (sync.py)
+### 3. Export CSV WooCommerce (main.py)
 
-**Estratégia de Sync:**
+**Formato PT-BR com colunas:**
 
 ```
-1. Calcula hash_full (todos os campos)
-2. Calcula hash_fast (só preço/estoque)
-3. Compara com banco de dados
-4. Decide: NEW | FULL_UPDATE | FAST_UPDATE | SKIP | BLOCKED
+ID, Tipo, SKU, Nome, Publicado, Em destaque?, Visibilidade no catálogo,
+Descrição curta, Descrição, Preço promocional, Preço normal,
+Categorias, Tags, Imagens, Limite de downloads, Dias para expirar...
 ```
 
-**PriceGuard:**
+**Campos importantes:**
 
-- Bloqueia variação > 40% (configurável)
-- Log + notificação
-- Evita erros de digitação no ERP
+- **Categorias**: Departamento do ERP (Pet, Pesca, Aquarismo, etc.)
+- **Tags**: Categoria + Marca (ex: "Pet, Special Dog")
+- **Marcas**: Marca detectada pelo enricher
+- **Imagens**: URL pública no Hostinger (https://aquafloragroshop.com.br/wp-content/uploads/produtos/{sku}.jpg)
 
-**Modos:**
-| Modo | Campos Atualizados |
-|------|-------------------|
-| FULL | Nome, descrição, preço, estoque, categoria |
-| LITE | Apenas preço e estoque (preserva SEO manual) |
+### 4. Sistema de Exclusões
 
-### 4. Image Scraper v3 (scrape_all_images.py)
+**config/exclusion_list.json:**
+
+```json
+{
+  "exclude_departments": ["FERRAMENTAS", "INSUMO", "INSUMOS"],
+  "exclude_keywords": {
+    "pereciveis": ["isca viva", "minhoca viva", "larva"],
+    "bebidas": ["refrigerante", "cerveja", "agua mineral"],
+    "tabaco": ["cigarro", "fumo"],
+    "muito_pesados": ["25kg", "50kg", "20kg"],
+    "muito_grandes_volumosos": [
+      "bebedouro galinha",
+      "caixa d'agua",
+      "gaiola grande"
+    ],
+    "dificil_embalar": ["vara de bambu", "cano pvc"],
+    "decoracao_aquario": ["pedra dolomita", "cascalho"],
+    "itens_pequenos": ["anzol avulso", "miçanga"],
+    "frageis_quebraveis": ["aquario vidro", "vaso ceramica grande"]
+  },
+  "max_weight_kg": 15.0,
+  "priority_categories_for_test": ["PET", "PESCA", "AQUARISMO"]
+}
+```
+
+**Lógica de Exclusão:**
+
+1. **Departamento** - FERRAMENTAS, INSUMO (194 produtos)
+2. **Keywords** - Perecíveis, bebidas, frágeis, volumosos (164 produtos)
+3. **Peso** - > 15kg automaticamente excluído (32 produtos)
+
+**Exceção:** Ração > 15kg é mantida (usa plástico stretch para embalar)
+
+### 5. Image Scraper v3 (scrape_all_images.py)
 
 **Pipeline:**
 
@@ -176,21 +217,30 @@ EnrichedProduct:
 5. Salva progresso a cada 20 produtos
 ```
 
-**Otimizações v3:**
-
-- [1] Cache de Vision AI por hash URL
-- [2] Fallback de busca (3 estratégias)
-- [3] Retry com backoff exponencial
-- [4] Skip de imagens existentes
-- [5] Prioridade por estoque
-
 **Thresholds:**
 | Departamento | Score Mínimo |
 |--------------|--------------|
 | PET, RACAO, PESCA | 0.45 |
 | Demais (difíceis) | 0.35 |
 
-### 5. Dashboard (dashboard/app.py)
+### 6. FTP Upload (Hostinger)
+
+**Configuração:**
+
+```python
+FTP_HOST = "147.93.38.37"
+FTP_PORT = 21
+FTP_USER = "u599889telefo@aquafloragroshop.com.br"
+FTP_PATH = "/domains/aquafloragroshop.com.br/public_html/wp-content/uploads/produtos/"
+```
+
+**URL Pública:**
+
+```
+https://aquafloragroshop.com.br/wp-content/uploads/produtos/{sku}.jpg
+```
+
+### 7. Dashboard (dashboard/app.py)
 
 **Stack:**
 
@@ -228,100 +278,44 @@ CREATE TABLE products (
 );
 ```
 
-### Tabela: price_history
-
-```sql
-CREATE TABLE price_history (
-    id INTEGER PRIMARY KEY,
-    sku TEXT,
-    old_price REAL,
-    new_price REAL,
-    variation_percent REAL,
-    blocked INTEGER,          -- 1 = bloqueado por PriceGuard
-    created_at DATETIME
-);
-```
-
 ---
 
-## 📤 Exclusões para E-commerce
+## 🚀 Comandos CLI
 
-### config/exclusion_list.json
-
-```json
-{
-  "exclude_departments": ["FERRAMENTAS", "INSUMO"],
-  "exclude_keywords": {
-    "pereciveis": ["isca viva", "minhoca viva"],
-    "decoracao_aquario": ["pedra dolomita", "cascalho", "substrato"],
-    "itens_pequenos": ["anzol avulso", "miçanga"],
-    "muito_pesados": ["25kg", "50kg", "20kg", "15kg"]
-  },
-  "max_weight_kg": 15.0
-}
-```
-
-### Lógica de Exclusão
-
-1. **Departamento** - FERRAMENTAS, INSUMO
-2. **Keywords** - Perecíveis, decoração, pequenos, pesados
-3. **Peso** - > 15kg automaticamente excluído
-
----
-
-## 🔌 APIs Externas
-
-### Google Custom Search
-
-```
-Endpoint: https://www.googleapis.com/customsearch/v1
-Quota: 100 queries/dia (free) ou $5/1000 queries
-Uso: Buscar imagens de produtos
-```
-
-### Google Vision AI
-
-```
-Endpoint: https://vision.googleapis.com/v1/images:annotate
-Custo: $1.50/1000 imagens
-Uso: Validar qualidade e labels das imagens
-```
-
-### WooCommerce REST API
-
-```
-Endpoint: {WOO_URL}/wp-json/wc/v3/products
-Autenticação: OAuth 1.0 (consumer_key + consumer_secret)
-Uso: CRUD de produtos
-```
-
----
-
-## 🧪 Testes
-
-### Estrutura
-
-```
-tests/
-├── conftest.py        # Fixtures compartilhadas
-├── test_parser.py     # Testes do parser
-├── test_enricher.py   # Testes do enricher
-├── test_database.py   # Testes do banco
-├── test_models.py     # Testes dos modelos
-└── test_image_scraper.py  # Testes do scraper
-```
-
-### Executar
+### Importação Completa
 
 ```powershell
-# Todos os testes
-pytest
+python main.py --input data/input/Athos.csv
+```
 
-# Com coverage
-pytest --cov=src --cov-report=html
+### Modo Teste (apenas PET, PESCA, AQUARISMO)
 
-# Teste específico
-pytest tests/test_parser.py -v
+```powershell
+python main.py --input data/input/Athos.csv --teste
+```
+
+### Modo LITE (só preço/estoque)
+
+```powershell
+python main.py --input data/input/Athos.csv --lite
+```
+
+### Dry Run (simula sem alterar)
+
+```powershell
+python main.py --input data/input/Athos.csv --dry-run
+```
+
+### Scraper de Imagens
+
+```powershell
+python scrape_all_images.py --limit 100 --dept PET
+```
+
+### Upload FTP
+
+```powershell
+python -c "from src.image_scraper import upload_images_ftp; upload_images_ftp()"
 ```
 
 ---
@@ -331,9 +325,17 @@ pytest tests/test_parser.py -v
 ### Obrigatórias
 
 ```env
-WOO_URL=https://sualoja.com.br
+WOO_URL=https://aquafloragroshop.com.br
 WOO_CONSUMER_KEY=ck_xxx
 WOO_CONSUMER_SECRET=cs_xxx
+```
+
+### FTP (para upload de imagens)
+
+```env
+FTP_HOST=147.93.38.37
+FTP_USER=u599889telefo@aquafloragroshop.com.br
+FTP_PASS=sua_senha
 ```
 
 ### Imagens (recomendado)
@@ -352,9 +354,6 @@ VISION_MIN_CONFIDENCE=0.6
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 DISCORD_BOT_TOKEN=MTI...
 
-# Telegram
-TELEGRAM_WEBHOOK_URL=https://api.telegram.org/bot.../sendMessage
-
 # Segurança
 PRICE_GUARD_MAX_VARIATION=40
 DRY_RUN=false
@@ -368,19 +367,6 @@ DASHBOARD_PASSWORD=secret
 
 ---
 
-## 🚀 Roadmap Futuro
-
-| Feature                    | Status       | Prioridade |
-| -------------------------- | ------------ | ---------- |
-| Scraper v3                 | ✅ Concluído | -          |
-| Dashboard falhas           | ✅ Concluído | -          |
-| Integração CSV + Images    | ✅ Concluído | -          |
-| Upload manual de imagens   | 🔜 Próximo   | Alta       |
-| Webhook estoque tempo real | 🔜 Próximo   | Média      |
-| Gráficos de vendas         | 💭 Planejado | Baixa      |
-
----
-
 ## 📞 Suporte
 
 - **Logs:** `logs/sync_*.log` e `logs/scraper_full.log`
@@ -389,4 +375,4 @@ DASHBOARD_PASSWORD=secret
 
 ---
 
-_Documento gerado automaticamente - v3.0_
+_Documento atualizado - v3.1 - 21/01/2026_

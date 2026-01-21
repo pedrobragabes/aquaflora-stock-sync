@@ -46,31 +46,45 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# Project specific
+# ===========================================
+# Project specific - AquaFlora Stock Sync
+# ===========================================
+
+# Environment & Secrets (NEVER commit!)
 .env
+*.pem
+*.key
+*credentials*
+*secret*
+
+# Database
 *.db
 products.db
+
+# Runtime State
 last_run_stats.json
+data/scraper_progress.json
+data/vision_cache.json
+data/upload_log.txt
 
 # Logs - ignore all except .gitkeep
 logs/*
 !logs/.gitkeep
 *.log
 
-# Data folders - ignore CSVs and images but keep directory structure
+# Data folders - user data, not code
 data/output/*
 !data/output/.gitkeep
 data/input/*
 !data/input/.gitkeep
 data/images/*
 !data/images/.gitkeep
-data/scraper_progress.json
+data/images_test/*
 
-# Credentials (NEVER commit!)
-*.pem
-*.key
-*credentials*
-*secret*
+# Node.js artifacts (from previous attempts)
+package-lock.json
+package.json
+node_modules/
 
 # Temporary
 *.tmp
@@ -78,7 +92,7 @@ data/scraper_progress.json
 *.bak
 *.backup
 
-# Test
+# Test/Coverage
 .pytest_cache/
 .coverage
 htmlcov/
@@ -94,7 +108,7 @@ MANIFEST
 # Gemini/AI agent artifacts
 .gemini/
 
-# Additional Python
+# Additional Python linting/type
 .mypy_cache/
 .ruff_cache/
 .pytype/

@@ -55,6 +55,22 @@ class Settings(BaseSettings):
     backup_rclone_remote: str = Field(default="gdrive:aquaflora-backup")
     backup_retention_days: int = Field(default=7)
     
+    # Image Upload Configuration
+    # URL base onde as imagens estarão acessíveis publicamente
+    # Exemplo: https://aquafloragroshop.com.br/wp-content/uploads/produtos/
+    image_base_url: str = Field(default="")
+    
+    # Pasta remota no servidor WordPress para upload das imagens
+    # Exemplo: /var/www/html/wp-content/uploads/produtos/
+    image_remote_path: str = Field(default="/wp-content/uploads/produtos/")
+    
+    # FTP/SFTP para upload de imagens (opcional)
+    image_ftp_host: str = Field(default="")
+    image_ftp_user: str = Field(default="")
+    image_ftp_password: str = Field(default="")
+    image_ftp_port: int = Field(default=21)
+    image_use_sftp: bool = Field(default=False)  # True = SFTP, False = FTP
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

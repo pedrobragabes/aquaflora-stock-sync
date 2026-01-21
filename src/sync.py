@@ -271,6 +271,13 @@ class WooSyncManager:
                     logger.info(f"Updated (full) product {product.sku}")
                     return True
                 else:
+                    # Log detalhes do erro para debug
+                    try:
+                        error_detail = response.json()
+                        logger.debug(f"WooCommerce error for {product.sku}: {error_detail}")
+                    except:
+                        pass
+                    
                     error = WooCommerceError(
                         f"Update failed: {response.status_code}",
                         status_code=response.status_code,

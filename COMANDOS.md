@@ -1,7 +1,7 @@
-# 📚 Guia de Comandos - AquaFlora Stock Sync v3.0
+# 📚 Guia de Comandos - AquaFlora Stock Sync v3.1
 
 > **Referência rápida de todos os comandos**  
-> Última atualização: 19 Janeiro 2026
+> Última atualização: 21 Janeiro 2026
 
 ---
 
@@ -56,6 +56,40 @@ Get-Job | Stop-Job
 | `data/vision_cache.json`     | Cache Vision AI       |
 | `logs/scraper_full.log`      | Log detalhado         |
 
+### 📤 Upload de Imagens para o Servidor
+
+**IMPORTANTE:** O WooCommerce não consegue acessar imagens do seu PC!  
+As imagens precisam estar em uma URL pública.
+
+```powershell
+# 1. Configurar credenciais FTP no .env:
+#    IMAGE_BASE_URL=https://aquafloragroshop.com.br/wp-content/uploads/produtos/
+#    IMAGE_FTP_HOST=aquafloragroshop.com.br
+#    IMAGE_FTP_USER=usuario
+#    IMAGE_FTP_PASSWORD=senha
+
+# 2. Ver o que seria enviado (dry-run)
+python upload_images.py --dry-run
+
+# 3. Enviar todas as imagens pendentes
+python upload_images.py
+
+# 4. Enviar imagem específica
+python upload_images.py --sku 7898586130210
+
+# 5. Verificar se imagens estão acessíveis
+python upload_images.py --verify
+
+# 6. Reenviar todas (mesmo já enviadas)
+python upload_images.py --all --force
+```
+
+**Fluxo completo:**
+
+1. `python scrape_all_images.py` - Baixar imagens
+2. `python upload_images.py` - Enviar para servidor
+3. `python main.py --input ...` - Gerar CSV com URLs
+
 ---
 
 ## 🔄 Sincronização (main.py)
@@ -69,11 +103,17 @@ python main.py --input data/input/Athos.csv
 # LITE MODE - Só preço e estoque (preserva SEO manual)
 python main.py --input data/input/Athos.csv --lite
 
+# MODO TESTE - Apenas PET, PESCA e AQUARISMO (importação rápida)
+python main.py --input data/input/Athos.csv --teste
+
 # DRY RUN - Simula sem alterar WooCommerce
 python main.py --input data/input/Athos.csv --dry-run
 
 # Permitir criação de novos produtos
 python main.py --input data/input/Athos.csv --allow-create
+
+# COMBINAR flags (teste + dry-run)
+python main.py --input data/input/Athos.csv --teste --dry-run
 ```
 
 ### Mapeamento de Produtos
