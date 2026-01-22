@@ -1,7 +1,7 @@
-# 📚 Guia de Comandos - AquaFlora Stock Sync v3.2
+# 📚 Guia de Comandos - AquaFlora Stock Sync v3.3
 
 > **Referência rápida de todos os comandos**  
-> Última atualização: 22 Janeiro 2026
+> Última atualização: 22 Janeiro 2026 | Nova flag: `--lite-images`
 
 ---
 
@@ -149,6 +149,9 @@ python main.py --input data/input/Athos.csv
 # LITE - Só preço e estoque (preserva SEO manual)
 python main.py --input data/input/Athos.csv --lite
 
+# LITE+IMAGES - Preço, estoque E imagens (preserva nome/descrição)
+python main.py --input data/input/Athos.csv --lite-images
+
 # TESTE - Só PET, PESCA, AQUARISMO (importação rápida)
 python main.py --input data/input/Athos.csv --teste
 
@@ -157,17 +160,27 @@ python main.py --input data/input/Athos.csv --dry-run
 
 # Combinações
 python main.py --input data/input/Athos.csv --teste --dry-run
+python main.py --input data/input/Athos.csv --lite-images --teste
 ```
+
+### Modos de Exportação
+
+| Modo            | Campos Atualizados                        | Uso                      |
+| --------------- | ----------------------------------------- | ------------------------ |
+| `--full`        | SKU, preço, estoque, nome, descrição, img | Primeira importação      |
+| `--lite`        | SKU, preço, estoque                       | Updates diários (rápido) |
+| `--lite-images` | SKU, preço, estoque, imagens              | Update com novas fotos   |
 
 ### Opções
 
-| Flag           | Descrição                        |
-| -------------- | -------------------------------- |
-| `--input FILE` | Arquivo CSV do ERP               |
-| `--lite`       | Modo leve (só preço/estoque)     |
-| `--teste`      | Só categorias principais         |
-| `--dry-run`    | Simula sem gerar arquivo         |
-| `--watch`      | Modo contínuo (observa mudanças) |
+| Flag            | Descrição                              |
+| --------------- | -------------------------------------- |
+| `--input FILE`  | Arquivo CSV do ERP                     |
+| `--lite`        | Modo leve (só preço/estoque)           |
+| `--lite-images` | Preço/estoque + imagens (preserva SEO) |
+| `--teste`       | Só categorias principais               |
+| `--dry-run`     | Simula sem gerar arquivo               |
+| `--watch`       | Modo contínuo (observa mudanças)       |
 
 ### Saída
 

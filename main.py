@@ -81,7 +81,7 @@ def setup_logging(log_level: str = "INFO", log_dir: Path = Path("./logs")):
     return logger
 
 
-def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = False, allow_create: bool = False, teste_mode: bool = False) -> SyncSummary:
+def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = False, lite_images_mode: bool = False, allow_create: bool = False, teste_mode: bool = False) -> SyncSummary:
     """
     Process a single input file.
     
@@ -89,6 +89,7 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
         input_file: Path to the Athos ERP export file
         dry_run: If True, don't actually sync to WooCommerce
         lite_mode: If True, only update price and stock (preserves SEO edits)
+        lite_images_mode: If True, update price, stock AND images (preserves other SEO edits)
         allow_create: If True, allow creating new products (default: False for safety)
         teste_mode: If True, only process PET/PESCA/AQUARISMO categories (fast testing)
         
@@ -101,7 +102,10 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
     if teste_mode:
         logger.info("🧪 MODO TESTE: Apenas Pet/Ração, Pesca e Aquarismo")
     
-    if lite_mode:
+    if lite_images_mode:
+        logger.info("🚀 Starting Sync in LITE+IMAGES MODE (Price, Stock & Images)")
+        logger.info("⚠️  Content fields (name, description) will NOT be updated")
+    elif lite_mode:
         logger.info("🚀 Starting Sync in LITE MODE (Price & Stock only)")
         logger.info("⚠️  Content fields (name, description, images) will NOT be updated")
     else:
@@ -220,7 +224,9 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
     
     # 5. Export to CSV (always)
     logger.info("📤 Exporting to CSV...")
-    if lite_mode:
+    if lite_images_mode:
+        output_file = export_to_csv_lite_images(enriched_products, settings.output_dir)
+    elif lite_mode:
         output_file = export_to_csv_lite(enriched_products, settings.output_dir)
     else:
         output_file = export_to_csv_full(enriched_products, settings.output_dir)
@@ -492,6 +498,87 @@ def export_to_csv_lite(products, output_dir: Path) -> Path:
                 1 if p.stock > 0 else 0,
             ]
             writer.writerow(row)
+    
+    return output_file
+
+
+def export_to_csv_lite_images(products, output_dir: Path) -> Path:
+    """
+    Export products to CSV for LITE+IMAGES mode (WooCommerce import).
+    Contains price, stock AND images - useful for updating images without touching SEO content.
+    """
+    import csv
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = output_dir / f"woocommerce_LITE_IMAGES_{timestamp}.csv"
+    
+    # Image directory for automatic image linking
+    image_dir = Path("data/images")
+    
+    # URL base para imagens
+    image_base_url = settings.image_base_url.rstrip('/') if settings.image_base_url else ""
+    
+    if not products:
+        return output_file
+    
+    images_found = 0
+    images_missing = 0
+    logger = logging.getLogger(__name__)
+    
+    def _find_image_path(sku: str, category: str) -> Optional[Path]:
+        """Busca imagem do produto por SKU."""
+        if not sku:
+            return None
+        
+        extensions = ['.jpg', '.png', '.webp', '.avif', '.jpeg', '.gif']
+        cat_folder = category_to_folder(category)
+        cat_path = image_dir / cat_folder
+        
+        # 1. Busca direta na pasta da categoria
+        if cat_path.exists():
+            for ext in extensions:
+                direct = cat_path / f"{sku}{ext}"
+                if direct.exists():
+                    return direct
+        
+        # 2. Busca recursiva em todas as pastas
+        for ext in extensions:
+            matches = list(image_dir.rglob(f"{sku}{ext}"))
+            if matches:
+                return matches[0]
+        
+        return None
+    
+    # Columns for WooCommerce import with images
+    columns = ['SKU', 'Regular price', 'Stock', 'In stock?', 'Images']
+    
+    with open(output_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+        
+        for p in products:
+            # Check if image exists
+            image_path = _find_image_path(p.sku, p.category)
+            image_url = ""
+            
+            if image_base_url and image_path and image_path.exists():
+                rel_path = image_path.relative_to(image_dir).as_posix()
+                image_url = f"{image_base_url}/{rel_path}"
+                images_found += 1
+            else:
+                images_missing += 1
+            
+            row = [
+                p.sku,
+                str(p.price),
+                p.stock,
+                1 if p.stock > 0 else 0,
+                image_url,
+            ]
+            writer.writerow(row)
+    
+    logger.info(f"📷 Images: {images_found} found, {images_missing} missing ({images_found/(images_found+images_missing)*100:.1f}% coverage)")
     
     return output_file
 
@@ -909,6 +996,12 @@ def main():
         help="Lite mode: update ONLY price and stock (preserves manual SEO edits)",
     )
     parser.add_argument(
+        "--lite-images",
+        action="store_true",
+        dest="lite_images",
+        help="Lite+Images mode: update price, stock AND images (preserves name/description)",
+    )
+    parser.add_argument(
         "--map-site",
         action="store_true",
         dest="map_site",
@@ -946,7 +1039,14 @@ def main():
         if not args.input.exists():
             print(f"❌ File not found: {args.input}")
             sys.exit(1)
-        process_file(args.input, dry_run=args.dry_run, lite_mode=args.lite, allow_create=args.allow_create, teste_mode=args.teste_mode)
+        process_file(
+            args.input, 
+            dry_run=args.dry_run, 
+            lite_mode=args.lite, 
+            lite_images_mode=args.lite_images,
+            allow_create=args.allow_create, 
+            teste_mode=args.teste_mode
+        )
     else:
         parser.print_help()
         print("\n❌ Please provide --input, --map-site, or --watch")
