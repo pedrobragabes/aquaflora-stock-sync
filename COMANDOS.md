@@ -19,11 +19,31 @@ python scrape_all_images.py
 # Só produtos com estoque
 python scrape_all_images.py --stock-only
 
+# Modo barato (DuckDuckGo/Bing, sem Vision/Google)
+python scrape_all_images.py --search-mode cheap
+# ou
+python scrape_all_images.py --cheap
+
+# Paralelismo (mais rápido no cheap)
+python scrape_all_images.py --search-mode cheap --workers 4
+
 # Limitar quantidade (para testes)
 python scrape_all_images.py --limit 50
 
 # Recomeçar do zero
 python scrape_all_images.py --reset
+
+# Reprocessar apenas falhas
+python scrape_all_images.py --only-failed
+
+# Processar apenas SKUs sem imagem local
+python scrape_all_images.py --only-missing-images
+
+# Forçar reprocessamento mesmo com imagem local
+python scrape_all_images.py --no-skip-existing
+
+# Número de workers em paralelo
+python scrape_all_images.py --workers 4
 
 # Combinações
 python scrape_all_images.py --stock-only --limit 100
@@ -49,12 +69,15 @@ Get-Job | Stop-Job
 
 ### Arquivos Gerados
 
-| Arquivo                      | Descrição             |
-| ---------------------------- | --------------------- |
-| `data/images/*.jpg`          | Imagens 800x800       |
-| `data/scraper_progress.json` | Progresso (retomável) |
-| `data/vision_cache.json`     | Cache Vision AI       |
-| `logs/scraper_full.log`      | Log detalhado         |
+| Arquivo                               | Descrição             |
+| ------------------------------------- | --------------------- |
+| `data/images/<categoria>/SKU.jpg`     | Imagens 800x800       |
+| `data/scraper_progress.json`          | Progresso (retomável) |
+| `data/vision_cache.json`              | Cache Vision AI       |
+| `data/search_cache.json`              | Cache de busca        |
+| `data/reports/image_success_*.json`   | Relatório de sucesso  |
+| `data/reports/weight_outliers_*.json` | Outliers de peso      |
+| `logs/scraper_full.log`               | Log detalhado         |
 
 ### 📤 Upload de Imagens para o Servidor
 

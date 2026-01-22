@@ -206,6 +206,193 @@ def get_input_files() -> list:
     return sorted(files, key=lambda x: x["modified"], reverse=True)
 
 
+def get_action_catalog() -> list:
+    """Get organized catalog of actions for the dashboard."""
+    return [
+        {
+            "key": "sync",
+            "icon": "📦",
+            "title": "Sincronização WooCommerce",
+            "items": [
+                {
+                    "id": "sync_full",
+                    "title": "Gerar CSV (FULL)",
+                    "description": "Nome, descrição, imagens, preço e estoque.",
+                    "command": "python main.py --input data/input/Athos.csv",
+                },
+                {
+                    "id": "sync_lite",
+                    "title": "Gerar CSV (LITE)",
+                    "description": "Apenas preço e estoque (preserva SEO).",
+                    "command": "python main.py --input data/input/Athos.csv --lite",
+                },
+                {
+                    "id": "sync_teste",
+                    "title": "Modo teste (PET/PESCA/AQUARISMO)",
+                    "description": "Importação rápida para validar fluxo.",
+                    "command": "python main.py --input data/input/Athos.csv --teste",
+                },
+                {
+                    "id": "map_site",
+                    "title": "Mapear produtos do site",
+                    "description": "Cria whitelist de SKUs existentes no WooCommerce.",
+                    "command": "python main.py --map-site",
+                },
+            ],
+        },
+        {
+            "key": "images",
+            "icon": "📸",
+            "title": "Scraper de Imagens",
+            "items": [
+                {
+                    "id": "scrape_stock",
+                    "title": "Scraper só com estoque",
+                    "description": "Processa produtos com estoque > 0.",
+                    "command": "python scrape_all_images.py --stock-only",
+                },
+                {
+                    "id": "scrape_all",
+                    "title": "Scraper completo",
+                    "description": "Processa todos os produtos.",
+                    "command": "python scrape_all_images.py",
+                },
+                {
+                    "id": "scrape_cheap",
+                    "title": "Modo cheap",
+                    "description": "DuckDuckGo/Bing sem Vision/Google.",
+                    "command": "python scrape_all_images.py --search-mode cheap",
+                },
+                {
+                    "id": "scrape_cheap_workers",
+                    "title": "Cheap com paralelismo",
+                    "description": "Acelera com múltiplos workers.",
+                    "command": "python scrape_all_images.py --search-mode cheap --workers 4",
+                },
+                {
+                    "id": "scrape_failed",
+                    "title": "Reprocessar falhas",
+                    "description": "Tenta novamente apenas os SKUs falhos.",
+                    "command": "python scrape_all_images.py --only-failed",
+                },
+                {
+                    "id": "scrape_missing",
+                    "title": "Somente sem imagem",
+                    "description": "Processa apenas SKUs sem imagem local.",
+                    "command": "python scrape_all_images.py --only-missing-images",
+                },
+            ],
+        },
+        {
+            "key": "upload",
+            "icon": "📤",
+            "title": "Upload de Imagens",
+            "items": [
+                {
+                    "id": "upload_all",
+                    "title": "Enviar todas as imagens",
+                    "description": "Upload completo via FTP/SFTP.",
+                    "command": "python upload_images.py",
+                },
+                {
+                    "id": "upload_dry",
+                    "title": "Dry-run de upload",
+                    "description": "Simula o upload sem enviar.",
+                    "command": "python upload_images.py --dry-run",
+                },
+                {
+                    "id": "upload_verify",
+                    "title": "Verificar imagens no servidor",
+                    "description": "Checa URLs remotas.",
+                    "command": "python upload_images.py --verify",
+                },
+                {
+                    "id": "upload_sku",
+                    "title": "Enviar um SKU específico",
+                    "description": "Upload pontual por SKU.",
+                    "command": "python upload_images.py --sku <SKU>",
+                },
+            ],
+        },
+        {
+            "key": "dashboard",
+            "icon": "🖥️",
+            "title": "Dashboard & Curadoria",
+            "items": [
+                {
+                    "id": "dashboard_run",
+                    "title": "Subir dashboard web",
+                    "description": "Acesso em http://localhost:8080",
+                    "command": "python -m uvicorn dashboard.app:app --host 0.0.0.0 --port 8080",
+                },
+                {
+                    "id": "dashboard_images",
+                    "title": "Curadoria de imagens",
+                    "description": "Use a aba Imagens no dashboard.",
+                    "command": "",
+                },
+            ],
+        },
+        {
+            "key": "bot",
+            "icon": "🤖",
+            "title": "Bot Discord",
+            "items": [
+                {
+                    "id": "bot_run",
+                    "title": "Iniciar bot",
+                    "description": "Comandos remotos via Discord.",
+                    "command": "python bot_control.py",
+                },
+            ],
+        },
+        {
+            "key": "docker",
+            "icon": "🐳",
+            "title": "Docker",
+            "items": [
+                {
+                    "id": "docker_up",
+                    "title": "Subir serviços",
+                    "description": "Build e start dos containers.",
+                    "command": "docker-compose up -d",
+                },
+                {
+                    "id": "docker_logs",
+                    "title": "Ver logs",
+                    "description": "Acompanhar logs em tempo real.",
+                    "command": "docker-compose logs -f",
+                },
+                {
+                    "id": "docker_down",
+                    "title": "Parar serviços",
+                    "description": "Finaliza containers.",
+                    "command": "docker-compose down",
+                },
+            ],
+        },
+        {
+            "key": "tests",
+            "icon": "🧪",
+            "title": "Testes & Qualidade",
+            "items": [
+                {
+                    "id": "pytest",
+                    "title": "Rodar testes",
+                    "description": "Suite completa do pytest.",
+                    "command": "pytest",
+                },
+                {
+                    "id": "pytest_cov",
+                    "title": "Cobertura",
+                    "description": "Relatório HTML de coverage.",
+                    "command": "pytest --cov=src --cov-report=html",
+                },
+            ],
+        },
+    ]
+
+
 def scheduled_sync_job():
     """
     Job function called by APScheduler at scheduled time.
@@ -337,6 +524,17 @@ async def images_page(request: Request):
     return templates.TemplateResponse("images.html", {
         "request": request,
         "stats": stats,
+        "state": state,
+    })
+
+
+@app.get("/actions", response_class=HTMLResponse)
+async def actions_page(request: Request):
+    """Actions catalog page."""
+    actions = get_action_catalog()
+    return templates.TemplateResponse("actions.html", {
+        "request": request,
+        "actions": actions,
         "state": state,
     })
 
@@ -591,7 +789,7 @@ async def partial_pending_list(request: Request):
 
 
 @app.get("/api/images/search/{sku}", response_class=HTMLResponse)
-async def api_search_images(request: Request, sku: str):
+async def api_search_images(request: Request, sku: str, mode: str = "auto"):
     """Search images for a product and return HTMX partial."""
     try:
         # Get product name from database or use SKU
@@ -611,10 +809,15 @@ async def api_search_images(request: Request, sku: str):
                         break
         
         # Search for images
+        search_mode = (mode or "auto").lower()
+        if search_mode not in ("auto", "premium", "cheap"):
+            search_mode = "auto"
+
         candidates = search_and_get_thumbnails(
             product_name=product_name,
             sku=sku,
-            max_results=6
+            max_results=6,
+            search_mode=search_mode
         )
         
     except Exception as e:

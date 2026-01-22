@@ -84,7 +84,8 @@ class ImageCurator:
         product_name: str,
         ean: str = "",
         category: str = "",
-        max_results: int = 6
+        max_results: int = 6,
+        search_mode: str = "auto"
     ) -> List[dict]:
         """
         Search images for a product.
@@ -113,7 +114,8 @@ class ImageCurator:
             sku=sku,
             ean=ean,
             category=category,
-            max_results=max_results
+            max_results=max_results,
+            search_mode=search_mode
         )
     
     def prefetch_next(
@@ -121,7 +123,8 @@ class ImageCurator:
         next_sku: str,
         product_name: str,
         ean: str = "",
-        category: str = ""
+        category: str = "",
+        search_mode: str = "auto"
     ):
         """
         Prefetch images for next product in background.
@@ -143,7 +146,8 @@ class ImageCurator:
                     sku=next_sku,
                     ean=ean,
                     category=category,
-                    max_results=6
+                    max_results=6,
+                    search_mode=search_mode
                 )
                 self._prefetch_cache[next_sku] = results
                 logger.debug(f"Prefetched {len(results)} images for SKU {next_sku}")

@@ -66,6 +66,7 @@ last_run_stats.json
 data/scraper_progress.json
 data/vision_cache.json
 data/upload_log.txt
+data/search_cache.json
 
 # Logs - ignore all except .gitkeep
 logs/*
@@ -79,7 +80,12 @@ data/input/*
 !data/input/.gitkeep
 data/images/*
 !data/images/.gitkeep
+data/images/*.jpeg
+data/images/*.png
+data/images/*.webp
 data/images_test/*
+data/reports/*
+!data/reports/.gitkeep
 
 # Node.js artifacts (from previous attempts)
 package-lock.json

@@ -109,6 +109,9 @@ class EnrichedProduct(BaseModel):
     category_original: str
     brand: Optional[str] = None
     weight_kg: Optional[float] = None
+    weight_unit_kg: Optional[float] = None
+    weight_total_kg: Optional[float] = None
+    weight_qty: Optional[int] = None
     
     short_description: str
     description: str
@@ -122,7 +125,11 @@ class EnrichedProduct(BaseModel):
     @property
     def hash_full(self) -> str:
         """Hash of ALL fields - triggers full update if changed."""
-        content = f"{self.sku}|{self.name}|{self.description}|{self.short_description}|{self.category}|{self.brand}|{self.weight_kg}|{','.join(self.tags)}"
+        content = (
+            f"{self.sku}|{self.name}|{self.description}|{self.short_description}|"
+            f"{self.category}|{self.brand}|{self.weight_kg}|{self.weight_unit_kg}|"
+            f"{self.weight_total_kg}|{self.weight_qty}|{','.join(self.tags)}"
+        )
         return md5(content.encode()).hexdigest()
     
     @computed_field
@@ -163,6 +170,7 @@ class WooPayloadFull(BaseModel):
     @classmethod
     def from_enriched(cls, product: EnrichedProduct) -> "WooPayloadFull":
         """Create payload from enriched product."""
+        weight_value = product.weight_total_kg or product.weight_kg
         payload = cls(
             sku=product.sku,
             name=product.name,
@@ -172,7 +180,7 @@ class WooPayloadFull(BaseModel):
             short_description=product.short_description,
             categories=[{"name": product.category}],
             tags=[{"name": tag} for tag in product.tags],
-            weight=str(product.weight_kg) if product.weight_kg else None,
+            weight=str(weight_value) if weight_value else None,
             status="publish" if product.published and product.stock > 0 else "draft",
         )
         
@@ -192,6 +200,9 @@ class WooPayloadFull(BaseModel):
             {"key": "_categoria_original", "value": product.category_original},
             {"key": "_nome_original", "value": product.name_original},
             {"key": "_marca", "value": product.brand or ""},
+            {"key": "_peso_unitario_kg", "value": str(product.weight_unit_kg or "")},
+            {"key": "_peso_total_kg", "value": str(product.weight_total_kg or "")},
+            {"key": "_peso_quantidade", "value": str(product.weight_qty or "")},
         ]
         
         return payload

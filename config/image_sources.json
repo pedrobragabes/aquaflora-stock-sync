@@ -1,0 +1,36 @@
+{
+  "_comment": "Regras opcionais de fontes de imagem por categoria",
+  "default_blocklist": [],
+  "default_allowlist": [],
+  "category_rules": {
+    "pet": {
+      "allowlist": [
+        "cobasi.com.br",
+        "petlove.com.br",
+        "petz.com.br",
+        "premierpet.com.br",
+        "royalcanin.com.br"
+      ],
+      "blocklist": []
+    },
+    "pesca": {
+      "allowlist": [
+        "albatroz.com.br",
+        "maruri.com.br",
+        "marinesports.com.br"
+      ],
+      "blocklist": []
+    },
+    "racao": {
+      "allowlist": [
+        "cobasi.com.br",
+        "petlove.com.br",
+        "petz.com.br",
+        "premierpet.com.br",
+        "royalcanin.com.br",
+        "totalalimentos.com.br"
+      ],
+      "blocklist": []
+    }
+  }
+}

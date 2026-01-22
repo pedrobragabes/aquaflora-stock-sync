@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Central de Ações - AquaFlora Stock Sync{% endblock %}
+
+{% block content %}
+<div class="dashboard actions-page">
+    <header class="dashboard-header">
+        <div>
+            <h1>✅ Central de Ações</h1>
+            <p class="muted">Checklist com comandos e atalhos organizados por área.</p>
+        </div>
+        <div class="actions-controls">
+            <input id="action-search" class="form-control" placeholder="Buscar ação, comando ou descrição">
+            <label class="checkbox-label checkbox-inline">
+                <input type="checkbox" id="only-unchecked">
+                <span>Mostrar só pendentes</span>
+            </label>
+            <button class="btn btn-secondary btn-sm" onclick="clearChecklist()">Limpar checklist</button>
+        </div>
+    </header>
+
+    <div class="actions-grid">
+        {% for section in actions %}
+        <section class="card action-section" data-section="{{ section.key }}">
+            <div class="card-header">
+                <h2>{{ section.icon }} {{ section.title }}</h2>
+                <span class="stats-badge">{{ section.items | length }} ações</span>
+            </div>
+            <div class="card-body">
+                <ul class="action-list">
+                    {% for item in section.items %}
+                    <li class="action-item" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ (item.command or '')) | lower }}">
+                        <label class="checkbox-label action-checkbox">
+                            <input type="checkbox" class="action-check" data-action-id="{{ item.id }}">
+                            <span class="action-title">{{ item.title }}</span>
+                        </label>
+                        <p class="action-desc">{{ item.description }}</p>
+                        {% if item.command %}
+                        <div class="action-command"><code>{{ item.command }}</code></div>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    const STORAGE_KEY = "dashboard_action_checklist";
+
+    function loadChecklist() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function saveChecklist(state) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function applyChecklistState() {
+        const state = loadChecklist();
+        document.querySelectorAll(".action-check").forEach((checkbox) => {
+            const id = checkbox.getAttribute("data-action-id");
+            checkbox.checked = Boolean(state[id]);
+        });
+    }
+
+    function updateChecklistState() {
+        const state = loadChecklist();
+        document.querySelectorAll(".action-check").forEach((checkbox) => {
+            const id = checkbox.getAttribute("data-action-id");
+            state[id] = checkbox.checked;
+        });
+        saveChecklist(state);
+    }
+
+    function filterActions() {
+        const query = document.getElementById("action-search").value.trim().toLowerCase();
+        const onlyUnchecked = document.getElementById("only-unchecked").checked;
+
+        document.querySelectorAll(".action-item").forEach((item) => {
+            const text = item.getAttribute("data-search") || "";
+            const checkbox = item.querySelector(".action-check");
+            const matchesQuery = !query || text.includes(query);
+            const matchesChecked = !onlyUnchecked || (checkbox && !checkbox.checked);
+            item.style.display = matchesQuery && matchesChecked ? "block" : "none";
+        });
+    }
+
+    function clearChecklist() {
+        localStorage.removeItem(STORAGE_KEY);
+        applyChecklistState();
+        filterActions();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        applyChecklistState();
+        filterActions();
+
+        document.querySelectorAll(".action-check").forEach((checkbox) => {
+            checkbox.addEventListener("change", () => {
+                updateChecklistState();
+                filterActions();
+            });
+        });
+
+        document.getElementById("action-search").addEventListener("input", filterActions);
+        document.getElementById("only-unchecked").addEventListener("change", filterActions);
+    });
+</script>
+{% endblock %}

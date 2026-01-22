@@ -19,7 +19,7 @@ Prerequisites:
        IMAGE_USE_SFTP=false
        IMAGE_REMOTE_PATH=/wp-content/uploads/produtos/
     
-    2. Images should be in data/images/ folder with SKU.jpg naming
+    2. Images should be in data/images/<categoria>/SKU.jpg
 """
 
 import argparse
@@ -43,6 +43,17 @@ except ImportError:
 
 from config.settings import settings
 
+
+def _relative_image_path(local_path: Path) -> str:
+    return local_path.relative_to(LOCAL_IMAGES_DIR).as_posix()
+
+
+def _find_image_by_sku(sku: str) -> Optional[Path]:
+    if not sku:
+        return None
+    matches = list(LOCAL_IMAGES_DIR.rglob(f"{sku}.jpg"))
+    return matches[0] if matches else None
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -60,7 +71,7 @@ def get_local_images() -> List[Path]:
     """Get list of local image files."""
     if not LOCAL_IMAGES_DIR.exists():
         return []
-    return list(LOCAL_IMAGES_DIR.glob("*.jpg"))
+    return list(LOCAL_IMAGES_DIR.rglob("*.jpg"))
 
 
 def get_uploaded_skus() -> set:
@@ -110,16 +121,17 @@ def upload_via_ftp(local_path: Path, remote_filename: str, dry_run: bool = False
         
         # Navigate to remote directory (create recursively if needed)
         remote_path = settings.image_remote_path.rstrip('/')
+        subdir = str(Path(remote_filename).parent).replace("\\", "/")
+        target_path = f"{remote_path}/{subdir}" if subdir != "." else remote_path
         try:
-            ftp.cwd(remote_path)
+            ftp.cwd(target_path)
         except ftplib.error_perm:
-            # Create directory structure recursively
-            ftp_mkdir_recursive(ftp, remote_path)
-            ftp.cwd(remote_path)
+            ftp_mkdir_recursive(ftp, target_path)
+            ftp.cwd(target_path)
         
         # Upload file
         with open(local_path, 'rb') as f:
-            ftp.storbinary(f'STOR {remote_filename}', f)
+            ftp.storbinary(f'STOR {Path(remote_filename).name}', f)
         
         ftp.quit()
         logger.info(f"✅ Uploaded: {local_path.name}")
@@ -152,14 +164,22 @@ def upload_via_sftp(local_path: Path, remote_filename: str, dry_run: bool = Fals
             raise Exception("Failed to create SFTP client")
         
         remote_path = settings.image_remote_path.rstrip('/')
-        remote_full_path = f"{remote_path}/{remote_filename}"
+        subdir = str(Path(remote_filename).parent).replace("\\", "/")
+        target_path = f"{remote_path}/{subdir}" if subdir != "." else remote_path
+        remote_full_path = f"{target_path}/{Path(remote_filename).name}"
         
         # Ensure remote directory exists
         try:
-            sftp.stat(remote_path)
+            sftp.stat(target_path)
         except FileNotFoundError:
-            logger.info(f"Creating remote directory: {remote_path}")
-            sftp.mkdir(remote_path)
+            parts = target_path.strip("/").split("/")
+            current = ""
+            for part in parts:
+                current += f"/{part}"
+                try:
+                    sftp.stat(current)
+                except FileNotFoundError:
+                    sftp.mkdir(current)
         
         # Upload file
         sftp.put(str(local_path), remote_full_path)
@@ -177,7 +197,7 @@ def upload_via_sftp(local_path: Path, remote_filename: str, dry_run: bool = Fals
 
 def upload_image(local_path: Path, dry_run: bool = False) -> bool:
     """Upload a single image using configured method (FTP or SFTP)."""
-    remote_filename = local_path.name
+    remote_filename = _relative_image_path(local_path)
     
     if settings.image_use_sftp:
         return upload_via_sftp(local_path, remote_filename, dry_run)
@@ -185,7 +205,7 @@ def upload_image(local_path: Path, dry_run: bool = False) -> bool:
         return upload_via_ftp(local_path, remote_filename, dry_run)
 
 
-def verify_remote_image(sku: str) -> bool:
+def verify_remote_image(local_path: Path) -> bool:
     """Verify if an image exists on the remote server."""
     import requests
     
@@ -193,16 +213,17 @@ def verify_remote_image(sku: str) -> bool:
         logger.error("IMAGE_BASE_URL not configured")
         return False
     
-    url = f"{settings.image_base_url.rstrip('/')}/{sku}.jpg"
+    rel_path = _relative_image_path(local_path)
+    url = f"{settings.image_base_url.rstrip('/')}/{rel_path}"
     
     try:
         response = requests.head(url, timeout=10)
         exists = response.status_code == 200
         
         if exists:
-            logger.info(f"✅ {sku}: Image exists at {url}")
+            logger.info(f"✅ {local_path.stem}: Image exists at {url}")
         else:
-            logger.warning(f"❌ {sku}: Image NOT found (HTTP {response.status_code})")
+            logger.warning(f"❌ {local_path.stem}: Image NOT found (HTTP {response.status_code})")
         
         return exists
     except Exception as e:
@@ -251,7 +272,7 @@ def main():
             if args.sku and sku != args.sku:
                 continue
             
-            if verify_remote_image(sku):
+            if verify_remote_image(img):
                 found += 1
             else:
                 missing += 1
@@ -265,8 +286,8 @@ def main():
     
     if args.sku:
         # Single SKU mode
-        img_path = LOCAL_IMAGES_DIR / f"{args.sku}.jpg"
-        if not img_path.exists():
+        img_path = _find_image_by_sku(args.sku)
+        if not img_path:
             logger.error(f"❌ Image not found: {img_path}")
             sys.exit(1)
         

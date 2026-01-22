@@ -15,7 +15,7 @@ Sistema completo para e-commerce que:
 
 1. **Lê CSV do ERP Athos** → Parser inteligente que limpa dados "sujos"
 2. **Enriquece produtos** → Detecta marca (160+), peso, gera SEO
-3. **Busca imagens** → Google Search + Vision AI validation
+3. **Busca imagens** → Modo premium (Google + Vision) ou modo barato (DuckDuckGo/Bing)
 4. **Upload FTP** → Envia imagens para Hostinger
 5. **Exporta CSV WooCommerce** → Formato PT-BR com URLs públicas
 6. **Dashboard Web** → Controle visual completo
@@ -36,6 +36,14 @@ python scrape_all_images.py --stock-only
 
 # Ou todos os produtos
 python scrape_all_images.py
+
+# Modo barato (DuckDuckGo/Bing, sem Vision/Google)
+python scrape_all_images.py --search-mode cheap
+# ou
+python scrape_all_images.py --cheap
+
+# Paralelismo (mais rápido no cheap)
+python scrape_all_images.py --search-mode cheap --workers 4
 ```
 
 **Opções:**
@@ -44,12 +52,21 @@ python scrape_all_images.py
 | `--stock-only` | Só produtos com estoque > 0 |
 | `--limit N` | Limitar a N produtos |
 | `--reset` | Recomeçar do zero |
+| `--search-mode premium|cheap` | Define modo de busca |
+| `--cheap` | Atalho para modo barato |
+| `--only-failed` | Reprocessa apenas SKUs com falha |
+| `--only-missing-images` | Processa apenas SKUs sem imagem local |
+| `--skip-existing` | Pula SKUs com imagem local (padrão) |
+| `--no-skip-existing` | Processa mesmo com imagem local |
+| `--workers N` | Número de workers em paralelo |
 
 **Saídas:**
 
-- `data/images/*.jpg` - Imagens 800x800
+- `data/images/<categoria>/SKU.jpg` - Imagens 800x800 organizadas por categoria
 - `data/scraper_progress.json` - Progresso
 - `data/vision_cache.json` - Cache Vision AI
+- `data/search_cache.json` - Cache de busca por SKU
+- `data/reports/image_success_*.json` - Relatório de sucesso por categoria/marca
 
 ### Passo 1.5: Upload FTP para Servidor
 
@@ -75,6 +92,7 @@ python main.py --input data/input/Athos.csv --teste
 
 - `data/output/woocommerce_import_*.csv` - CSV para importar
 - Coluna `Images` preenchida automaticamente se imagem existe
+- `data/reports/weight_outliers_*.json` - Outliers de peso por categoria
 
 ### Passo 3: Importar no WooCommerce
 
@@ -124,12 +142,19 @@ Após importação bem-sucedida:
 
 Sistema inteligente de busca de imagens:
 
-### Funcionalidades
+### Modos de busca
 
-- ✅ **Google Custom Search** - Busca por nome + marca
-- ✅ **Vision AI Validation** - Score 0-1 por qualidade
+- **Premium (padrão)**: Google Custom Search + Vision AI (melhor qualidade)
+- **Cheap**: DuckDuckGo + Bing (sem custos de API)
+
+### Funcionalidades (gerais)
+
+- ✅ **Busca premium** - Google Custom Search + Vision AI
+- ✅ **Busca barata** - DuckDuckGo + Bing (fallback)
 - ✅ **Validação Semântica** - Labels devem corresponder ao produto
 - ✅ **Cache de Vision AI** - Evita análises duplicadas
+- ✅ **Cache por SKU** - Evita buscas repetidas
+- ✅ **Relatório diário** - Sucesso por categoria/marca
 - ✅ **Fallback de Busca** - 3 estratégias de query
 - ✅ **Retry com Backoff** - Trata erros 429
 - ✅ **Prioridade por Estoque** - Processa estoque > 0 primeiro
@@ -146,22 +171,36 @@ Sistema inteligente de busca de imagens:
 ### APIs Necessárias (.env)
 
 ```env
-# Google Custom Search
+# Modo premium (necessário)
 GOOGLE_API_KEY=AIzaSy...
 GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
-
-# Vision AI (recomendado)
 VISION_AI_ENABLED=true
+
+# Modo barato (opcional)
+IMAGE_SEARCH_MODE=cheap
 ```
+
+### Controle de fontes (opcional)
+
+Configure domínios permitidos/bloqueados por categoria em:
+
+- `config/image_sources.json` (allowlist por categoria; limpe a allowlist se quiser mais liberdade)
+
+### Outliers de peso (opcional)
+
+Regras de alerta por categoria ficam em:
+
+- `config/exclusion_list.json` → `weight_outlier_rules`
 
 ### Custo Estimado
 
-| Cenário        | Produtos | Custo   |
-| -------------- | -------- | ------- |
-| Só com estoque | ~3.200   | ~R$ 86  |
-| Todos válidos  | ~4.100   | ~R$ 112 |
+| Cenário                   | Produtos | Custo   |
+| ------------------------- | -------- | ------- |
+| Premium (Vision + Google) | ~3.200   | ~R$ 86  |
+| Premium (Vision + Google) | ~4.100   | ~R$ 112 |
+| Cheap (DuckDuckGo/Bing)   | ~4.100   | ~R$ 0   |
 
-_Baseado em Vision AI $1.50/1000 imagens_
+_Premium baseado em Vision AI $1.50/1000 imagens_
 
 ---
 
@@ -248,7 +287,7 @@ aquaflora-stock-sync/
 ├── data/
 │   ├── input/              # CSVs do ERP
 │   ├── output/             # CSVs para WooCommerce
-│   └── images/             # Imagens scraped
+│   └── images/             # Imagens scraped (por categoria)
 ├── logs/                   # Logs rotativos
 └── tests/                  # Testes pytest
 ```
@@ -263,10 +302,13 @@ WOO_URL=https://sualoja.com.br
 WOO_CONSUMER_KEY=ck_xxx
 WOO_CONSUMER_SECRET=cs_xxx
 
-# Google APIs
+# Google APIs (modo premium)
 GOOGLE_API_KEY=AIzaSy...
 GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
 VISION_AI_ENABLED=true
+
+# Modo barato (opcional)
+IMAGE_SEARCH_MODE=cheap
 
 # Discord (opcional)
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...

@@ -274,8 +274,9 @@ class ProductEnricher:
         if brand and brand.upper() not in formatted_name.upper():
             formatted_name = f"{formatted_name} - {brand}"
         
-        # Extract weight
-        weight = self._extract_weight(raw.name)
+        # Extract weight (advanced)
+        weight_total, weight_unit, weight_qty = self._extract_weight_details(raw.name)
+        weight = weight_total
         
         # Format category
         category = self._format_category(raw.department)
@@ -286,7 +287,7 @@ class ProductEnricher:
         # Generate descriptions
         short_desc = self._generate_short_description(formatted_name, category, brand)
         long_desc = self._generate_html_description(
-            formatted_name, category, brand, weight
+            formatted_name, category, brand, weight_total, weight_unit, weight_qty
         )
         
         return EnrichedProduct(
@@ -301,6 +302,9 @@ class ProductEnricher:
             category_original=raw.department,
             brand=brand,
             weight_kg=weight,
+            weight_unit_kg=weight_unit,
+            weight_total_kg=weight_total,
+            weight_qty=weight_qty,
             short_description=short_desc,
             description=long_desc,
             tags=tags,
@@ -332,7 +336,50 @@ class ProductEnricher:
         return None
     
     def _extract_weight(self, name: str) -> Optional[float]:
-        """Extract weight from product name, convert to kg."""
+        """Extract total weight from product name, convert to kg."""
+        weight_total, _, _ = self._extract_weight_details(name)
+        return weight_total
+
+    def _extract_weight_details(self, name: str) -> tuple[Optional[float], Optional[float], Optional[int]]:
+        """
+        Extract total weight, unit weight and quantity from product name.
+
+        Supports:
+        - "2x10kg" (qty=2, unit=10, total=20)
+        - "15kg c/2" (qty=2, unit=15, total=30)
+        - "10kg + 2kg" (qty=2, total=12)
+        """
+        if not name:
+            return None, None, None
+
+        text = name.lower()
+
+        # 1) Pattern: 2x10kg
+        match = re.search(r'(\d+)\s*[xX]\s*(\d+(?:[\.,]\d+)?)\s*kg', text, re.IGNORECASE)
+        if match:
+            qty = int(match.group(1))
+            unit = float(match.group(2).replace(',', '.'))
+            total = round(qty * unit, 3)
+            return total, round(unit, 3), qty
+
+        # 2) Pattern: 15kg c/2 (com 2)
+        match = re.search(r'(\d+(?:[\.,]\d+)?)\s*kg\s*(?:c\/?|c\.|com)\s*(\d+)', text, re.IGNORECASE)
+        if match:
+            unit = float(match.group(1).replace(',', '.'))
+            qty = int(match.group(2))
+            total = round(qty * unit, 3)
+            return total, round(unit, 3), qty
+
+        # 3) Pattern: 10kg + 2kg
+        if '+' in text:
+            kg_matches = re.findall(r'(\d+(?:[\.,]\d+)?)\s*kg', text, re.IGNORECASE)
+            if len(kg_matches) >= 2:
+                values = [float(v.replace(',', '.')) for v in kg_matches]
+                total = round(sum(values), 3)
+                unit = round(values[0], 3)
+                return total, unit, len(values)
+
+        # 4) Fallback: first weight occurrence (kg/g/ml/l)
         for pattern, multiplier in self._weight_patterns:
             match = pattern.search(name)
             if match:
@@ -342,11 +389,11 @@ class ProductEnricher:
                     # Sanity check: between 0.001kg and 50kg
                     if 0.001 <= value <= 50:
                         logger.debug(f"Extracted weight {value}kg from '{name}'")
-                        return round(value, 3)
+                        return round(value, 3), round(value, 3), 1
                 except ValueError:
                     continue
-        
-        return None
+
+        return None, None, None
     
     def _format_name(self, name: str) -> str:
         """Format product name with title case and corrections."""
@@ -367,6 +414,14 @@ class ProductEnricher:
         # Remove invalid characters
         name = re.sub(r'[^\w\s\-.,()\&/áàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑº°ª%]', '', name)
         
+        # Remove duplicated weight tokens (e.g., "15Kg 15Kg")
+        name = re.sub(
+            r'\b(\d+(?:[\.,]\d+)?\s*(?:Kg|G|Ml|L))\b(?:\s+\1\b)+',
+            r'\1',
+            name,
+            flags=re.IGNORECASE
+        )
+
         # Truncate if too long
         if len(name) > 100:
             name = name[:97] + "..."
@@ -417,7 +472,9 @@ class ProductEnricher:
         name: str, 
         category: str, 
         brand: Optional[str],
-        weight: Optional[float]
+        weight_total: Optional[float],
+        weight_unit: Optional[float],
+        weight_qty: Optional[int]
     ) -> str:
         """Generate HTML description for WooCommerce with category-specific SEO."""
         
@@ -435,8 +492,8 @@ class ProductEnricher:
         
         intro += category_seo['intro']
         
-        if weight:
-            weight_formatted = f"{weight:.3f}".replace(".", ",")
+        if weight_total:
+            weight_formatted = f"{weight_total:.3f}".replace(".", ",")
             intro += f' Com <strong>{weight_formatted}kg</strong>.'
         
         intro += '</p>'
@@ -448,9 +505,16 @@ class ProductEnricher:
         if brand:
             lines.append(f'  <li>🏷️ <strong>Marca:</strong> {brand}</li>')
         
-        if weight:
-            weight_formatted = f"{weight:.3f}".replace(".", ",")
-            lines.append(f'  <li>⚖️ <strong>Peso/Conteúdo:</strong> {weight_formatted} Kg</li>')
+        if weight_total:
+            weight_formatted = f"{weight_total:.3f}".replace(".", ",")
+            if weight_qty and weight_unit and weight_qty > 1:
+                unit_formatted = f"{weight_unit:.3f}".replace(".", ",")
+                lines.append(
+                    f'  <li>⚖️ <strong>Peso/Conteúdo:</strong> {weight_qty}x {unit_formatted} Kg '
+                    f'(total {weight_formatted} Kg)</li>'
+                )
+            else:
+                lines.append(f'  <li>⚖️ <strong>Peso/Conteúdo:</strong> {weight_formatted} Kg</li>')
         
         lines.append(f'  <li>📦 <strong>Categoria:</strong> {category}</li>')
         

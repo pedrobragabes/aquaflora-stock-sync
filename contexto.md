@@ -11,7 +11,7 @@
 
 1. Importa dados do ERP Athos (CSV)
 2. Enriquece com marca, peso, SEO
-3. Busca imagens automaticamente (Google + Vision AI)
+3. Busca imagens automaticamente (premium Google + Vision ou cheap DuckDuckGo/Bing)
 4. Faz upload FTP para Hostinger
 5. Gera CSV para importação no WooCommerce
 6. Fornece dashboard web e bot Discord
@@ -46,10 +46,13 @@
 └─────────────────┘     └─────────────────┘
          ▲
          │
-┌────────┴────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Image Scraper  │────▶│   Vision AI     │────▶│   FTP Upload    │
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Image Scraper  │────▶│ Vision AI (opt) │────▶│   FTP Upload    │
 │ (scrape_all_images)   │ (image_scraper) │     │   (Hostinger)   │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
+     │
+     ▼
+   DuckDuckGo/Bing (modo barato)
 ```
 
 ---
@@ -85,6 +88,7 @@
 | `settings.py`         | Pydantic Settings (carrega .env)    |
 | `brands.json`         | Lista de 160+ marcas                |
 | `exclusion_list.json` | Exclusões completas para e-commerce |
+| `image_sources.json`  | Regras de fontes por categoria      |
 
 ### Scripts (pasta scripts/)
 
@@ -131,6 +135,7 @@ RawProduct:
 
 - Detecta marca em 160+ padrões
 - Extrai peso do nome (500g, 1kg, 1,5L)
+- Extrai peso avançado (2x10kg, 15kg c/2, 10kg + 2kg)
 - Gera categoria WooCommerce
 - Cria descrição SEO em HTML
 - Cria short_description
@@ -163,6 +168,34 @@ Categorias, Tags, Imagens, Limite de downloads, Dias para expirar...
 - **Tags**: Categoria + Marca (ex: "Pet, Special Dog")
 - **Marcas**: Marca detectada pelo enricher
 - **Imagens**: URL pública no Hostinger (https://aquafloragroshop.com.br/wp-content/uploads/produtos/{sku}.jpg)
+
+### 3.1 Modos de busca de imagem
+
+### 3.1 Modos de busca de imagem
+
+- **Premium (default)**: Google Custom Search + Vision AI
+- **Cheap**: DuckDuckGo + Bing (sem custos de API)
+
+**Config (.env):**
+
+```env
+# Premium
+GOOGLE_API_KEY=AIzaSy...
+GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
+VISION_AI_ENABLED=true
+
+# Cheap (opcional)
+IMAGE_SEARCH_MODE=cheap
+```
+
+**Regras de fontes por categoria (opcional):**
+
+- `config/image_sources.json`
+
+**Cache e relatórios:**
+
+- `data/search_cache.json` (cache por SKU)
+- `data/reports/image_success_*.json` (taxa de sucesso por categoria/marca)
 
 ### 4. Sistema de Exclusões
 
@@ -198,6 +231,11 @@ Categorias, Tags, Imagens, Limite de downloads, Dias para expirar...
 3. **Peso** - > 15kg automaticamente excluído (32 produtos)
 
 **Exceção:** Ração > 15kg é mantida (usa plástico stretch para embalar)
+
+**Outliers de Peso:**
+
+- Regras configuráveis por categoria em `config/exclusion_list.json` → `weight_outlier_rules`
+- Relatórios gerados em `data/reports/weight_outliers_*.json`
 
 ### 5. Image Scraper v3 (scrape_all_images.py)
 

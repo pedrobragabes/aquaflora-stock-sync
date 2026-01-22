@@ -8,6 +8,14 @@
     <header class="dashboard-header">
         <h1>📸 Curadoria de Imagens</h1>
         <div class="quick-actions">
+            <div class="search-mode">
+                <label for="search-mode">Modo:</label>
+                <select id="search-mode" onchange="setSearchMode(this.value)">
+                    <option value="premium">Premium</option>
+                    <option value="cheap">Cheap</option>
+                    <option value="auto">Auto</option>
+                </select>
+            </div>
             <span class="stats-badge">
                 <strong>{{ stats.pending_count | default(0) }}</strong> pendentes
             </span>
@@ -69,6 +77,19 @@
 <script>
     let currentSku = null;
     let currentProductName = null;
+    let searchMode = localStorage.getItem('imageSearchMode') || 'cheap';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const select = document.getElementById('search-mode');
+        if (select) {
+            select.value = searchMode;
+        }
+    });
+
+    function setSearchMode(mode) {
+        searchMode = mode;
+        localStorage.setItem('imageSearchMode', mode);
+    }
 
     function selectProduct(sku, productName) {
         currentSku = sku;
@@ -88,7 +109,7 @@
         document.querySelector(`[data-sku="${sku}"]`)?.classList.add('active');
 
         // Load candidates
-        htmx.ajax('GET', `/api/images/search/${sku}`, {
+        htmx.ajax('GET', `/api/images/search/${sku}?mode=${encodeURIComponent(searchMode)}`, {
             target: '#image-candidates',
             indicator: '#loading'
         });
@@ -257,6 +278,21 @@
         .images-sidebar {
             max-height: 200px;
         }
+    }
+
+    .search-mode {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .search-mode select {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        padding: 0.3rem 0.5rem;
     }
 </style>
 {% endblock %}

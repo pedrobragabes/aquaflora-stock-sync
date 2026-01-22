@@ -26,6 +26,7 @@ if sys.platform == 'win32':
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -37,6 +38,7 @@ from src.database import ProductDatabase
 from src.sync import WooSyncManager
 from src.notifications import NotificationService
 from src.models import SyncSummary
+from src.image_scraper import category_to_folder
 
 
 def setup_logging(log_level: str = "INFO", log_dir: Path = Path("./logs")):
@@ -165,7 +167,13 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
     # Show sample
     if enriched_products:
         sample = enriched_products[0]
-        logger.info(f"   Sample: {sample.sku} | {sample.name} | {sample.brand or 'No brand'} | {sample.weight_kg or 'No weight'}kg")
+        sample_weight = sample.weight_total_kg or sample.weight_kg or 'No weight'
+        logger.info(f"   Sample: {sample.sku} | {sample.name} | {sample.brand or 'No brand'} | {sample_weight}kg")
+
+    # 2.5. Outlier report (weights)
+    outlier_report = generate_weight_outlier_report(enriched_products, exclusion_config)
+    if outlier_report:
+        logger.warning(f"⚠️ Weight outliers report generated: {outlier_report}")
     
     # 3. Initialize database
     logger.info("💾 Initializing database...")
@@ -360,6 +368,101 @@ def _load_exclusion_config() -> dict:
         return {}
 
 
+def _get_outlier_max_kg(category: str, category_original: str, rules: dict) -> tuple[float, str]:
+    """Get max weight threshold (kg) for a category based on rules."""
+    default_max = float(rules.get("default_max_kg", 50.0))
+    category_max = rules.get("category_max_kg", {})
+    category_lower = (category or "").lower()
+    category_original_lower = (category_original or "").lower()
+
+    for key, value in category_max.items():
+        key_lower = key.lower()
+        if key_lower in category_lower or key_lower in category_original_lower:
+            try:
+                return float(value), key
+            except (TypeError, ValueError):
+                continue
+
+    return default_max, "default"
+
+
+def generate_weight_outlier_report(products, config: dict) -> Optional[Path]:
+    """Generate outlier report for product weights by category."""
+    rules = config.get("weight_outlier_rules", {}) if config else {}
+    if not rules:
+        return None
+
+    outliers = []
+    by_category = {}
+
+    for p in products:
+        weight_total = p.weight_total_kg or p.weight_kg
+        if not weight_total:
+            continue
+
+        max_kg, rule_key = _get_outlier_max_kg(p.category, p.category_original, rules)
+        if weight_total > max_kg:
+            outliers.append({
+                "sku": p.sku,
+                "name": p.name,
+                "category": p.category,
+                "category_original": p.category_original,
+                "weight_total_kg": weight_total,
+                "weight_unit_kg": p.weight_unit_kg,
+                "weight_qty": p.weight_qty,
+                "max_kg": max_kg,
+                "rule": rule_key,
+            })
+
+            cat_stats = by_category.setdefault(p.category, {
+                "count": 0,
+                "max_kg": max_kg,
+            })
+            cat_stats["count"] += 1
+
+    if not outliers:
+        return None
+
+    report_dir = Path("data/reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    json_path = report_dir / f"weight_outliers_{timestamp}.json"
+    md_path = report_dir / f"weight_outliers_{timestamp}.md"
+
+    report = {
+        "generated_at": datetime.now().isoformat(),
+        "total_outliers": len(outliers),
+        "by_category": by_category,
+        "items": outliers,
+    }
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        import json
+        json.dump(report, f, indent=2, ensure_ascii=False)
+
+    # Markdown summary
+    lines = ["# ⚖️ Relatório de Outliers de Peso", "", f"Gerado em: {report['generated_at']}", ""]
+    lines.append(f"Total de outliers: **{report['total_outliers']}**")
+    lines.append("")
+    lines.append("## Por Categoria")
+    for cat, stats in sorted(by_category.items(), key=lambda x: x[0]):
+        lines.append(f"- **{cat}**: {stats['count']} (max {stats['max_kg']} kg)")
+    lines.append("")
+    lines.append("## Itens")
+    for item in outliers[:200]:
+        qty = f"{item['weight_qty']}x" if item.get("weight_qty") else ""
+        unit = f"{item['weight_unit_kg']}kg" if item.get("weight_unit_kg") else ""
+        lines.append(
+            f"- {item['sku']} | {item['name']} | {item['category']} | "
+            f"{qty}{unit} total {item['weight_total_kg']}kg (max {item['max_kg']}kg)"
+        )
+
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines))
+
+    return json_path
+
+
 def export_to_csv_lite(products, output_dir: Path) -> Path:
     """
     Export products to CSV for LITE mode (WooCommerce import).
@@ -430,17 +533,28 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
     
     logger = logging.getLogger(__name__)
     
+    def _find_image_path(sku: str, category: str) -> Optional[Path]:
+        if not sku:
+            return None
+        cat_folder = category_to_folder(category)
+        direct = image_dir / cat_folder / f"{sku}.jpg"
+        if direct.exists():
+            return direct
+        matches = list(image_dir.rglob(f"{sku}.jpg"))
+        return matches[0] if matches else None
+
     with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(columns)
         
         for p in products:
             # Check if image exists
-            image_path = image_dir / f"{p.sku}.jpg"
+            image_path = _find_image_path(p.sku, p.category)
             image_url = ""
             
-            if image_base_url and image_path.exists():
-                image_url = f"{image_base_url}/{p.sku}.jpg"
+            if image_base_url and image_path and image_path.exists():
+                rel_path = image_path.relative_to(image_dir).as_posix()
+                image_url = f"{image_base_url}/{rel_path}"
                 images_found += 1
             
             # Descrição curta com marca
@@ -449,17 +563,22 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
             else:
                 short_desc = f"{p.name} | Categoria: {p.category} | AquaFlora Agroshop"
             
+            peso_total = p.weight_total_kg or p.weight_kg
+            peso_unit = p.weight_unit_kg
+            peso_qty = p.weight_qty
+
             # Peso formatado
-            peso_display = f"{p.weight_kg:.3f} Kg" if p.weight_kg else ""
+            peso_display = f"{peso_total:.3f} Kg" if peso_total else ""
+            peso_unit_display = f"{peso_unit:.3f} Kg" if peso_unit else ""
             
-            # Descrição completa HTML com marca e peso
-            if p.brand and p.weight_kg:
+                        # Descrição completa HTML com marca e peso
+                        if p.brand and peso_total:
                 description = f'''<div class="product-description">
 <h2>{p.name}</h2>
 <p>Produto <strong>{p.brand}</strong> da linha {p.category}. Disponível na <strong>AquaFlora Agroshop</strong> com <strong>{peso_display}</strong> e melhor custo-benefício.</p>
 <ul class="product-features">
   <li>🏷️ <strong>Marca:</strong> {p.brand}</li>
-  <li>⚖️ <strong>Peso/Conteúdo:</strong> {peso_display}</li>
+    <li>⚖️ <strong>Peso/Conteúdo:</strong> {peso_display}{' (' + str(peso_qty) + 'x ' + peso_unit_display + ')' if peso_qty and peso_unit else ''}</li>
   <li>📦 <strong>Categoria:</strong> {p.category}</li>
   <li>✅ <strong>Produto Original</strong> com garantia</li>
   <li>🚚 <strong>Entrega Rápida</strong> para todo o Brasil</li>
@@ -531,7 +650,7 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
                 '',  # Quantidade baixa
                 0,  # São permitidas encomendas?
                 0,  # Vendido individualmente?
-                p.weight_kg or '',  # Peso (kg)
+                peso_total or '',  # Peso (kg)
                 '',  # Comprimento
                 '',  # Largura
                 '',  # Altura

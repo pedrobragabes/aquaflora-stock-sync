@@ -62,6 +62,19 @@
     "ração",
     "racao"
   ],
+
+  "weight_outlier_rules": {
+    "default_max_kg": 50.0,
+    "category_max_kg": {
+      "pet": 30.0,
+      "ração": 30.0,
+      "racao": 30.0,
+      "pesca": 25.0,
+      "aquarismo": 25.0,
+      "farmacia": 5.0,
+      "tabacaria": 2.0
+    }
+  },
   
   "priority_categories_for_test": [
     "PET",

@@ -16,6 +16,9 @@ import time
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
+from hashlib import md5
+from urllib.parse import urlparse
+import unicodedata
 from typing import List, Optional, Tuple, Dict, TYPE_CHECKING, Any
 
 import requests
@@ -70,6 +73,10 @@ TIMEOUT_SECONDS = 15
 SLEEP_MIN = 0.3
 SLEEP_MAX = 1.0
 MAX_FILE_SIZE_KB = 3  # Minimum file size to be valid (lowered from 5)
+
+# Search cache
+SEARCH_CACHE_FILE = Path(os.getenv("IMAGE_SEARCH_CACHE_FILE", "data/search_cache.json"))
+SEARCH_CACHE_MAX = int(os.getenv("IMAGE_SEARCH_CACHE_MAX", "20000"))
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -184,6 +191,97 @@ BLOCKED_DOMAINS = [
     "researchgate", "academia.edu", "scielo",
 ]
 
+# Image source rules (category-based allowlist/blocklist)
+IMAGE_SOURCES_CONFIG = Path("config/image_sources.json")
+
+
+def load_image_source_rules() -> dict:
+    """Load image source rules from config/image_sources.json."""
+    rules = {
+        "default_blocklist": list(BLOCKED_DOMAINS),
+        "default_allowlist": [],
+        "category_rules": {},
+    }
+
+    if IMAGE_SOURCES_CONFIG.exists():
+        try:
+            import json
+            with open(IMAGE_SOURCES_CONFIG, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            rules["default_blocklist"] = list(set(rules["default_blocklist"]) | set(data.get("default_blocklist", [])))
+            rules["default_allowlist"] = data.get("default_allowlist", [])
+            rules["category_rules"] = data.get("category_rules", {})
+        except Exception as e:
+            logger.warning(f"Failed to load image source rules: {e}")
+
+    return rules
+
+
+IMAGE_SOURCE_RULES = load_image_source_rules()
+
+
+class SearchCache:
+    """Cache search results by SKU + name hash to avoid repeated queries."""
+
+    def __init__(self, cache_file: Path):
+        self.cache_file = cache_file
+        self.cache: Dict[str, List[dict]] = {}
+        self.hits = 0
+        self.misses = 0
+        self._load()
+
+    def _load(self):
+        if self.cache_file.exists():
+            try:
+                import json
+                with open(self.cache_file, "r", encoding="utf-8") as f:
+                    self.cache = json.load(f)
+            except Exception:
+                self.cache = {}
+
+    def save(self):
+        try:
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+            import json
+            with open(self.cache_file, "w", encoding="utf-8") as f:
+                json.dump(self.cache, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def get(self, key: str) -> Optional[List[dict]]:
+        if key in self.cache:
+            self.hits += 1
+            return self.cache[key]
+        self.misses += 1
+        return None
+
+    def set(self, key: str, candidates: List["ImageCandidate"]):
+        if len(self.cache) >= SEARCH_CACHE_MAX:
+            # Simple eviction: drop random key
+            try:
+                self.cache.pop(next(iter(self.cache)))
+            except Exception:
+                self.cache = {}
+        self.cache[key] = [
+            {
+                "url": c.url,
+                "thumbnail": c.thumbnail,
+                "title": c.title,
+                "source": c.source,
+                "width": c.width,
+                "height": c.height,
+            }
+            for c in candidates
+        ]
+
+    def stats(self) -> str:
+        total = self.hits + self.misses
+        rate = (self.hits / total * 100) if total > 0 else 0
+        return f"SearchCache: {self.hits}/{total} hits ({rate:.1f}%)"
+
+
+search_cache = SearchCache(SEARCH_CACHE_FILE)
+
 # Tokens que indicam imagens ruins
 BAD_URL_TOKENS = [
     "sprite", "icon", "logo", "placeholder", "blank",
@@ -198,16 +296,64 @@ BAD_URL_TOKENS = [
 ]
 
 
-def is_bad_image_url(url: str) -> bool:
+def category_to_folder(category: str) -> str:
+    """Normalize category to a safe folder name."""
+    if not category:
+        return "geral"
+    normalized = unicodedata.normalize("NFKD", str(category))
+    normalized = "".join(c for c in normalized if not unicodedata.combining(c))
+    normalized = normalized.lower()
+    normalized = re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")
+    return normalized or "geral"
+
+
+def _domain_matches(domain: str, rule_domain: str) -> bool:
+    if not domain or not rule_domain:
+        return False
+    domain = domain.lower()
+    rule_domain = rule_domain.lower().lstrip(".")
+    return domain == rule_domain or domain.endswith("." + rule_domain)
+
+
+def is_bad_image_url(url: str, category: str = "") -> bool:
     """
     Check if URL is likely a bad image (placeholder, logo, etc).
     
     Enhanced with domain blocking and better token detection.
     """
     u = url.lower()
+
+    # Category-based allow/block rules
+    try:
+        domain = urlparse(url).netloc.lower()
+    except Exception:
+        domain = ""
+
+    category_key = (category or "").lower()
+    category_rules = IMAGE_SOURCE_RULES.get("category_rules", {})
+    matched_rules = None
+    for key, rules in category_rules.items():
+        if key.lower() in category_key:
+            matched_rules = rules
+            break
+
+    if matched_rules:
+        allowlist = matched_rules.get("allowlist", [])
+        blocklist = matched_rules.get("blocklist", [])
+
+        if allowlist and not any(_domain_matches(domain, d) for d in allowlist):
+            return True
+
+        if any(_domain_matches(domain, d) for d in blocklist):
+            return True
+
+    # Default allowlist (if configured)
+    default_allowlist = IMAGE_SOURCE_RULES.get("default_allowlist", [])
+    if default_allowlist and not any(_domain_matches(domain, d) for d in default_allowlist):
+        return True
     
     # Check blocked domains
-    for domain in BLOCKED_DOMAINS:
+    for domain in IMAGE_SOURCE_RULES.get("default_blocklist", BLOCKED_DOMAINS):
         if domain in u:
             logger.debug(f"Blocked domain detected: {domain} in {url[:50]}")
             return True
@@ -248,7 +394,7 @@ def build_search_query(product_name: str, category: str = "", sku: str = "") -> 
     """
     clean_name = clean_product_name(product_name)
     
-    if not clean_name:
+        if not clean_name or len(clean_name.split()) < 2:
         return ""
     
     # Palavras-chave de contexto por categoria
@@ -288,6 +434,72 @@ def build_search_query(product_name: str, category: str = "", sku: str = "") -> 
         query_parts.append("produto")
     
     return " ".join(query_parts)
+
+
+def _has_blocked_extension(url: str) -> bool:
+    lower = url.lower()
+    return any(lower.endswith(ext) for ext in [".gif", ".svg", ".ico", ".bmp", ".webp"])
+
+
+def _search_cache_key(
+    product_name: str,
+    sku: str = "",
+    brand: str = "",
+    category: str = "",
+    search_mode: str = "auto"
+) -> str:
+    """Build a stable cache key for image search results."""
+    key_base = "|".join([
+        sku or "",
+        clean_product_name(product_name),
+        clean_product_name(brand),
+        clean_product_name(category),
+        search_mode.lower(),
+    ])
+    return md5(key_base.encode("utf-8")).hexdigest()
+
+
+def _candidates_from_cache(items: List[dict]) -> List["ImageCandidate"]:
+    """Convert cached dicts to ImageCandidate list."""
+    candidates = []
+    for item in items:
+        try:
+            candidates.append(ImageCandidate(
+                url=item.get("url", ""),
+                thumbnail=item.get("thumbnail", ""),
+                title=item.get("title", ""),
+                source=item.get("source", "cache"),
+                width=int(item.get("width", 0) or 0),
+                height=int(item.get("height", 0) or 0),
+            ))
+        except Exception:
+            continue
+    return candidates
+
+
+def get_cached_candidates(
+    product_name: str,
+    sku: str,
+    brand: str = "",
+    category: str = "",
+    search_mode: str = "auto"
+) -> tuple[Optional[str], Optional[List["ImageCandidate"]]]:
+    """Get cached candidates by computed key."""
+    if not sku:
+        return None, None
+    key = _search_cache_key(product_name, sku, brand, category, search_mode)
+    cached = search_cache.get(key)
+    if cached:
+        return key, _candidates_from_cache(cached)
+    return key, None
+
+
+def set_cached_candidates(key: Optional[str], candidates: List["ImageCandidate"]):
+    """Persist candidates in cache."""
+    if not key or not candidates:
+        return
+    search_cache.set(key, candidates)
+    search_cache.save()
 
 
 # =============================================================================
@@ -934,11 +1146,15 @@ def search_images_google(
         for item in items:
             image_url = item.get("link", "")
             
-            if not image_url or is_bad_image_url(image_url):
+            if not image_url or is_bad_image_url(image_url, category):
                 continue
             
             # Get image metadata
-            image_info = item.get("image", {})
+            image_info = item.get("image", {}) or {}
+            img_w = int(image_info.get("width", 0) or 0)
+            img_h = int(image_info.get("height", 0) or 0)
+            if img_w and img_h and (img_w < MIN_IMAGE_SIZE or img_h < MIN_IMAGE_SIZE):
+                continue
             
             candidates.append(ImageCandidate(
                 url=image_url,
@@ -965,15 +1181,17 @@ def search_images_duckduckgo(
     sku: str = "",
     ean: str = "",
     category: str = "",
+    brand: str = "",
     max_results: int = 6
 ) -> List[ImageCandidate]:
     """
     Search images using DuckDuckGo.
     
     Strategy (in order of specificity):
-    1. Optimized query with context
-    2. EAN barcode (if available)
-    3. Basic product name + "produto"
+    1. SKU + Nome + Marca
+    2. Optimized query with context
+    3. EAN barcode (if available)
+    4. Basic product name + "produto"
     """
     if not HAS_DDGS:
         logger.warning("duckduckgo-search not installed, skipping DuckDuckGo search")
@@ -982,17 +1200,31 @@ def search_images_duckduckgo(
     candidates = []
     queries = []
     
-    # Build optimized query first
+    clean_name = clean_product_name(product_name)
+    clean_brand = clean_product_name(brand)
+
+    # SKU + Nome + Marca (prioridade)
+    if sku and (clean_name or clean_brand):
+        if category:
+            queries.append(f"{sku} {clean_name} {clean_brand} {category}".strip())
+        queries.append(f"{sku} {clean_name} {clean_brand}".strip())
+    elif sku:
+        queries.append(sku)
+
+    # Build optimized query with context
     optimized_query = build_search_query(product_name, category, sku)
     if optimized_query and len(optimized_query) >= 5:
         queries.append(optimized_query)
     
     # EAN como segunda opção
     if ean and len(ean) >= 8:
+        if clean_brand:
+            queries.append(f"{ean} {clean_brand} {category}".strip())
+        if clean_name:
+            queries.append(f"{ean} {clean_name}".strip())
         queries.append(f'"{ean}" produto')
     
     # Query básica como fallback
-    clean_name = clean_product_name(product_name)
     if clean_name and len(clean_name) >= 5:
         # Adiciona "produto" para evitar imagens aleatórias
         queries.append(f"{clean_name} produto")
@@ -1017,7 +1249,7 @@ def search_images_duckduckgo(
                     continue
                 
                 url = r.get("image", "")
-                if not url or is_bad_image_url(url):
+                if not url or is_bad_image_url(url, category):
                     continue
                 
                 candidates.append(ImageCandidate(
@@ -1094,7 +1326,7 @@ def search_images_bing(
                 continue
             seen.add(url)
             
-            if is_bad_image_url(url):
+            if is_bad_image_url(url, category):
                 continue
             
             # Decode escaped characters
@@ -1126,18 +1358,34 @@ def search_images(
     sku: str = "",
     ean: str = "",
     category: str = "",
-    max_results: int = 1  # Default to 1 - first result is usually best
+    brand: str = "",
+    max_results: int = 1,  # Default to 1 - first result is usually best
+    search_mode: str = "auto",
+    use_cache: bool = True
 ) -> List[ImageCandidate]:
     """
     Main search function with cascade:
-    1. Google Custom Search (if API key configured) - most reliable
-    2. DuckDuckGo (free, decent quality)
-    3. Bing scraping (last resort)
+    - premium/auto: Google Custom Search (if configured) → DuckDuckGo → Bing
+    - cheap: DuckDuckGo → Bing (no Google/Vision)
     """
     candidates = []
+    mode = (search_mode or "auto").lower()
+
+    cache_key = None
+    if use_cache and sku:
+        cache_key = _search_cache_key(
+            product_name=product_name,
+            sku=sku,
+            brand=brand,
+            category=category,
+            search_mode=mode,
+        )
+        cached = search_cache.get(cache_key)
+        if cached:
+            return _candidates_from_cache(cached)
     
     # 1. Try Google first (if configured)
-    if GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID:
+    if mode in ("premium", "auto") and GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID:
         candidates = search_images_google(
             product_name=product_name,
             sku=sku,
@@ -1146,6 +1394,9 @@ def search_images(
             max_results=max_results
         )
         if candidates:
+            if use_cache and cache_key:
+                search_cache.set(cache_key, candidates)
+                search_cache.save()
             return candidates
     
     # 2. Fallback to DuckDuckGo
@@ -1154,10 +1405,14 @@ def search_images(
         sku=sku,
         ean=ean,
         category=category,
+        brand=brand,
         max_results=max_results
     )
     
     if candidates:
+        if use_cache and cache_key:
+            search_cache.set(cache_key, candidates)
+            search_cache.save()
         return candidates
     
     # 3. Last resort: Bing scraping
@@ -1167,6 +1422,9 @@ def search_images(
         category=category,
         max_results=max_results
     )
+    if candidates and use_cache and cache_key:
+        search_cache.set(cache_key, candidates)
+        search_cache.save()
     
     return candidates
 
@@ -1178,8 +1436,20 @@ def search_images(
 def download_image(url: str, timeout: int = TIMEOUT_SECONDS) -> Optional[bytes]:
     """Download image and return raw bytes."""
     try:
+        if _has_blocked_extension(url):
+            return None
+
         session = requests.Session()
         session.headers.update(random_headers())
+
+        # Try HEAD first to avoid downloading tiny/non-image files
+        try:
+            head = session.head(url, timeout=min(5, timeout), allow_redirects=True)
+            content_length = int(head.headers.get("Content-Length", 0) or 0)
+            if 0 < content_length < (MAX_FILE_SIZE_KB * 1024):
+                return None
+        except Exception:
+            pass
         
         resp = session.get(url, timeout=timeout, allow_redirects=True)
         
@@ -1314,7 +1584,9 @@ def search_and_get_thumbnails(
     sku: str = "",
     ean: str = "",
     category: str = "",
-    max_results: int = 6
+    brand: str = "",
+    max_results: int = 6,
+    search_mode: str = "auto"
 ) -> List[dict]:
     """
     Search for images and return list of candidates with metadata.
@@ -1325,7 +1597,9 @@ def search_and_get_thumbnails(
         sku=sku,
         ean=ean,
         category=category,
-        max_results=max_results
+        brand=brand,
+        max_results=max_results,
+        search_mode=search_mode
     )
     
     return [
@@ -1347,7 +1621,9 @@ def search_and_validate_best_image(
     ean: str = "",
     category: str = "",
     max_candidates: int = 5,
-    use_vision_ai: bool = True
+    use_vision_ai: bool = True,
+    brand: str = "",
+    search_mode: str = "auto"
 ) -> Tuple[Optional[bytes], Optional[ImageCandidate], Optional[VisionAnalysisResult]]:
     """
     Search for images and automatically select the best one using Vision AI.
@@ -1374,7 +1650,9 @@ def search_and_validate_best_image(
         sku=sku,
         ean=ean,
         category=category,
-        max_results=max_candidates
+        brand=brand,
+        max_results=max_candidates,
+        search_mode=search_mode
     )
     
     if not candidates:

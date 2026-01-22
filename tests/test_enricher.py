@@ -97,6 +97,38 @@ class TestWeightExtraction:
         )
         enriched = enricher.enrich(raw)
         assert enriched.weight_kg == 0.5
+
+    def test_extract_multiple_units(self, enricher):
+        """Should extract total and unit weight for 2x10kg."""
+        raw = RawProduct(
+            sku="123", name="RACAO PREMIUM 2x10kg",
+            stock=1, minimum=1, price=100, cost=50, department="PET"
+        )
+        enriched = enricher.enrich(raw)
+        assert enriched.weight_total_kg == 20.0
+        assert enriched.weight_unit_kg == 10.0
+        assert enriched.weight_qty == 2
+
+    def test_extract_c2_pattern(self, enricher):
+        """Should extract total and unit weight for 15kg c/2."""
+        raw = RawProduct(
+            sku="123", name="RACAO 15kg c/2",
+            stock=1, minimum=1, price=100, cost=50, department="PET"
+        )
+        enriched = enricher.enrich(raw)
+        assert enriched.weight_total_kg == 30.0
+        assert enriched.weight_unit_kg == 15.0
+        assert enriched.weight_qty == 2
+
+    def test_extract_plus_pattern(self, enricher):
+        """Should sum weights when name contains plus sign."""
+        raw = RawProduct(
+            sku="123", name="RACAO 10kg + 2kg",
+            stock=1, minimum=1, price=100, cost=50, department="PET"
+        )
+        enriched = enricher.enrich(raw)
+        assert enriched.weight_total_kg == 12.0
+        assert enriched.weight_qty == 2
     
     def test_no_weight_found(self, enricher):
         """Should return None when no weight in name."""
@@ -131,6 +163,16 @@ class TestNameFormatting:
         enriched = enricher.enrich(raw)
         # Should have proper accents
         assert "Ração" in enriched.name or "ração" in enriched.name.lower()
+
+    def test_remove_duplicate_weight_tokens(self, enricher):
+        """Should remove duplicated weight tokens in name."""
+        raw = RawProduct(
+            sku="123", name="RACAO 15KG 15KG",
+            stock=1, minimum=1, price=100, cost=50, department="PET"
+        )
+        enriched = enricher.enrich(raw)
+        assert "15" in enriched.name
+        assert "15Kg 15Kg" not in enriched.name
 
 
 class TestDescriptionGeneration:
