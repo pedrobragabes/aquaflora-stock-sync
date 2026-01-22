@@ -1,3 +1,7 @@
+# ===========================================
+# AquaFlora Stock Sync v3.2 - .gitignore
+# ===========================================
+
 # Python
 __pycache__/
 *.py[cod]
@@ -47,11 +51,13 @@ Thumbs.db
 desktop.ini
 
 # ===========================================
-# Project specific - AquaFlora Stock Sync
+# Project Specific - AquaFlora Stock Sync
 # ===========================================
 
 # Environment & Secrets (NEVER commit!)
 .env
+.env.*
+!.env.example
 *.pem
 *.key
 *credentials*
@@ -60,13 +66,14 @@ desktop.ini
 # Database
 *.db
 products.db
+*.db-journal
 
 # Runtime State
 last_run_stats.json
 data/scraper_progress.json
 data/vision_cache.json
-data/upload_log.txt
 data/search_cache.json
+data/upload_log.txt
 
 # Logs - ignore all except .gitkeep
 logs/*
@@ -76,27 +83,37 @@ logs/*
 # Data folders - user data, not code
 data/output/*
 !data/output/.gitkeep
+
 data/input/*
 !data/input/.gitkeep
+
+# All image folders
 data/images/*
 !data/images/.gitkeep
-data/images/*.jpeg
-data/images/*.png
-data/images/*.webp
 data/images_test/*
 data/reports/*
 !data/reports/.gitkeep
+
+# Old/temporary image folders
+data/images woocommerce/
+data/images scraper/
+data/Imagens antigas/
+
+# CSV and MD data files
+data/*.csv
+data/*.md
 
 # Node.js artifacts (from previous attempts)
 package-lock.json
 package.json
 node_modules/
 
-# Temporary
+# Temporary files
 *.tmp
 *.temp
 *.bak
 *.backup
+*~
 
 # Test/Coverage
 .pytest_cache/
@@ -104,6 +121,8 @@ node_modules/
 htmlcov/
 .tox/
 .nox/
+coverage.xml
+*.cover
 
 # Jupyter
 .ipynb_checkpoints/
@@ -111,10 +130,18 @@ htmlcov/
 # Distribution
 MANIFEST
 
-# Gemini/AI agent artifacts
+# AI/Agent artifacts
 .gemini/
+.copilot/
 
-# Additional Python linting/type
+# Python linting/type checking
 .mypy_cache/
 .ruff_cache/
 .pytype/
+.dmypy.json
+dmypy.json
+
+# Misc
+*.orig
+.hypothesis/
+

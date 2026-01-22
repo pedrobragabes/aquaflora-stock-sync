@@ -28,10 +28,14 @@ HAS_DDGS = False
 HAS_PILLOW = False
 
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS  # type: ignore
     HAS_DDGS = True
 except ImportError:
-    pass
+    try:
+        from duckduckgo_search import DDGS  # type: ignore
+        HAS_DDGS = True
+    except ImportError:
+        pass
 
 try:
     from PIL import Image
@@ -125,12 +129,15 @@ class VisionAnalysisResult:
 # TEXT PROCESSING (Reused from legacy scraper)
 # =============================================================================
 
-def clean_product_name(name: str) -> str:
+def clean_product_name(name: str, preserve_model: bool = False) -> str:
     """
     Clean product name for search queries.
     Removes promotional text, codes, special characters, and normalizes whitespace.
     
     Enhanced to produce better search queries.
+    
+    Args:
+        preserve_model: If True, keeps model codes like CBB12, N11 (useful for fishing lures)
     """
     if not name:
         return ""
@@ -140,8 +147,12 @@ def clean_product_name(name: str) -> str:
     # Remove códigos de produto entre parênteses ou colchetes (ex: "(ABC123)" ou "[REF-456]")
     s = re.sub(r"[\(\[][^\)\]]*[\)\]]", " ", s)
     
-    # Remove códigos alfanuméricos longos (provavelmente SKUs internos)
-    s = re.sub(r"\b[A-Z]{2,}\d{3,}\b", " ", s, flags=re.IGNORECASE)
+    # Remove códigos alfanuméricos longos, MAS preserva códigos de modelo curtos se preserve_model=True
+    if not preserve_model:
+        s = re.sub(r"\b[A-Z]{2,}\d{3,}\b", " ", s, flags=re.IGNORECASE)
+    else:
+        # Remove apenas SKUs muito longos (6+ dígitos)
+        s = re.sub(r"\b[A-Z]{2,}\d{6,}\b", " ", s, flags=re.IGNORECASE)
     s = re.sub(r"\b\d{5,}\b", " ", s)  # Números muito longos
     
     # Stopwords to remove (promotional text)
@@ -297,9 +308,45 @@ BAD_URL_TOKENS = [
 
 
 def category_to_folder(category: str) -> str:
-    """Normalize category to a safe folder name."""
+    """Normalize category to a safe folder name with proper mappings."""
     if not category:
         return "geral"
+    
+    # Mapeamento de departamentos para pastas
+    CATEGORY_MAPPING = {
+        "pesca": "pesca",
+        "pet": "pet",
+        "racao": "racao",
+        "ração": "racao",
+        "farmacia": "farmacia",
+        "farmácia": "farmacia",
+        "aquarismo": "aquarismo",
+        "aquario": "aquarismo",
+        "aquário": "aquarismo",
+        "passaros": "passaros",
+        "pássaros": "passaros",
+        "aves": "aves",
+        "piscina": "piscina",
+        "cutelaria": "cutelaria",
+        "ferramentas": "ferramentas",
+        "tabacaria": "tabacaria",
+        "geral": "geral",
+        "insumo": "insumos",
+        "insumos": "insumos",
+    }
+    
+    cat_lower = category.lower().strip()
+    
+    # Busca correspondência direta
+    if cat_lower in CATEGORY_MAPPING:
+        return CATEGORY_MAPPING[cat_lower]
+    
+    # Busca parcial
+    for key, folder in CATEGORY_MAPPING.items():
+        if key in cat_lower:
+            return folder
+    
+    # Fallback: normaliza o nome
     normalized = unicodedata.normalize("NFKD", str(category))
     normalized = "".join(c for c in normalized if not unicodedata.combining(c))
     normalized = normalized.lower()
@@ -393,8 +440,7 @@ def build_search_query(product_name: str, category: str = "", sku: str = "") -> 
     Adds relevant context keywords to improve search accuracy.
     """
     clean_name = clean_product_name(product_name)
-    
-        if not clean_name or len(clean_name.split()) < 2:
+    if not clean_name or len(clean_name.split()) < 2:
         return ""
     
     # Palavras-chave de contexto por categoria
@@ -1200,8 +1246,15 @@ def search_images_duckduckgo(
     candidates = []
     queries = []
     
-    clean_name = clean_product_name(product_name)
+    # Detecta se é produto de pesca (preserva códigos de modelo)
+    is_fishing = category and "pesca" in category.lower()
+    clean_name = clean_product_name(product_name, preserve_model=is_fishing)
+    clean_name_full = clean_product_name(product_name, preserve_model=True)  # Sempre com modelo
     clean_brand = clean_product_name(brand)
+    
+    # Extrai possível código de modelo do nome (ex: CBB12, N11, COR-24)
+    model_match = re.search(r'\b([A-Z]{1,4}[-]?\d{1,3})\b', product_name.upper())
+    model_code = model_match.group(1) if model_match else ""
 
     # SKU + Nome + Marca (prioridade)
     if sku and (clean_name or clean_brand):
@@ -1216,6 +1269,16 @@ def search_images_duckduckgo(
     if optimized_query and len(optimized_query) >= 5:
         queries.append(optimized_query)
     
+    # Para produtos de pesca, adiciona queries específicas com modelo
+    if is_fishing and clean_brand:
+        # Marca + nome do produto (ex: "marine sports isca vulcan")
+        queries.append(f"{clean_brand} {clean_name_full}")
+        # Se temos modelo, busca mais específica
+        if model_code:
+            queries.append(f"{clean_brand} {model_code}")
+        # Busca no site da marca
+        queries.append(f"site:marinesports.com.br {clean_name_full}")
+    
     # EAN como segunda opção
     if ean and len(ean) >= 8:
         if clean_brand:
@@ -1223,6 +1286,16 @@ def search_images_duckduckgo(
         if clean_name:
             queries.append(f"{ean} {clean_name}".strip())
         queries.append(f'"{ean}" produto')
+    
+    # Query com nome do produto tipo (isca, vara, carretilha, etc)
+    if is_fishing and clean_name:
+        # Extrai tipo de isca do nome
+        isca_types = ["isca", "vara", "carretilha", "molinete", "anzol", "chumbo", "linha"]
+        for tipo in isca_types:
+            if tipo in clean_name.lower():
+                # Busca genérica do tipo + modelo
+                queries.append(f"{tipo} {model_code} {clean_brand}".strip())
+                break
     
     # Query básica como fallback
     if clean_name and len(clean_name) >= 5:
@@ -1235,14 +1308,24 @@ def search_images_duckduckgo(
             time.sleep(random.uniform(SLEEP_MIN, SLEEP_MAX))
             
             with DDGS() as ddgs:  # type: ignore[possibly-undefined]
-                results = list(ddgs.images(
-                    keywords=query,
-                    region="br-pt",
-                    safesearch="off",
-                    size="Medium",
-                    type_image="photo",
-                    max_results=max_results * 2  # Fetch more to filter bad ones
-                ))
+                try:
+                    results = list(ddgs.images(
+                        query=query,
+                        region="br-pt",
+                        safesearch="off",
+                        size="Medium",
+                        type_image="photo",
+                        max_results=max_results * 2  # Fetch more to filter bad ones
+                    ))
+                except TypeError:
+                    results = list(ddgs.images(
+                        keywords=query,
+                        region="br-pt",
+                        safesearch="off",
+                        size="Medium",
+                        type_image="photo",
+                        max_results=max_results * 2
+                    ))
             
             for r in results:
                 if not isinstance(r, dict):
@@ -1269,7 +1352,10 @@ def search_images_duckduckgo(
                 break
                 
         except Exception as e:
-            logger.warning(f"DuckDuckGo search error for '{query}': {e}")
+            message = str(e)
+            logger.warning(f"DuckDuckGo search error for '{query}': {message}")
+            if "ratelimit" in message.lower() or "202" in message:
+                time.sleep(2.5)
             continue
     
     return candidates[:max_results]
@@ -1278,77 +1364,105 @@ def search_images_duckduckgo(
 def search_images_bing(
     product_name: str,
     category: str = "",
+    brand: str = "",
     max_results: int = 6
 ) -> List[ImageCandidate]:
     """
     Search images using Bing as fallback.
     Uses HTML scraping since there's no free official API.
+    Tries multiple query variations for better results.
     """
     candidates = []
-    clean_name = clean_product_name(product_name)
+    is_fishing = category and "pesca" in category.lower()
+    clean_name = clean_product_name(product_name, preserve_model=is_fishing)
+    clean_brand = clean_product_name(brand)
     
     if not clean_name:
         return []
     
-    # Build query
-    query = clean_name
-    if category:
-        query = f"{clean_name} {category}"
+    # Build multiple queries to try
+    queries_to_try = []
     
-    try:
-        time.sleep(random.uniform(SLEEP_MIN, SLEEP_MAX))
-        
-        # Bing Images search URL
-        search_url = "https://www.bing.com/images/search"
-        params = {
-            "q": query,
-            "form": "HDRSC2",
-            "first": "1",
-            "tsc": "ImageBasicHover",
-        }
-        
-        session = requests.Session()
-        session.headers.update(random_headers())
-        
-        resp = session.get(search_url, params=params, timeout=TIMEOUT_SECONDS)
-        
-        if resp.status_code != 200:
-            logger.warning(f"Bing returned status {resp.status_code}")
-            return []
-        
-        # Extract image URLs via regex (Bing uses murl:"URL" format)
-        pattern = r'murl":"(https?://[^"]+)"'
-        matches = re.findall(pattern, resp.text)
-        
-        seen = set()
-        for url in matches:
-            if url in seen:
-                continue
-            seen.add(url)
-            
-            if is_bad_image_url(url, category):
-                continue
-            
-            # Decode escaped characters
-            url = url.replace("\\u002f", "/").replace("\\/", "/")
-            
-            candidates.append(ImageCandidate(
-                url=url,
-                thumbnail=url,
-                title="",
-                source="bing",
-                width=0,
-                height=0,
-            ))
-            
-            if len(candidates) >= max_results:
+    # Query 1: Nome + marca + categoria
+    if clean_brand:
+        queries_to_try.append(f"{clean_brand} {clean_name}")
+    
+    # Query 2: Nome completo + categoria
+    if category:
+        queries_to_try.append(f"{clean_name} {category}")
+    
+    # Query 3: Nome simples
+    queries_to_try.append(clean_name)
+    
+    # Query 4: Para pesca, tenta com termos específicos
+    if is_fishing:
+        # Extrai tipo de isca
+        isca_types = {"isca": "fishing lure", "vara": "fishing rod", "carretilha": "baitcaster reel"}
+        for pt, en in isca_types.items():
+            if pt in clean_name.lower():
+                queries_to_try.append(f"{clean_brand} {en}" if clean_brand else en)
                 break
-        
+    
+    for query in queries_to_try:
         if candidates:
-            logger.info(f"Bing found {len(candidates)} images for query: {query}")
+            break
+            
+        try:
+            time.sleep(random.uniform(SLEEP_MIN, SLEEP_MAX))
+            
+            # Bing Images search URL
+            search_url = "https://www.bing.com/images/search"
+            params = {
+                "q": query,
+                "form": "HDRSC2",
+                "first": "1",
+                "tsc": "ImageBasicHover",
+            }
+            
+            session = requests.Session()
+            session.headers.update(random_headers())
+            
+            resp = session.get(search_url, params=params, timeout=TIMEOUT_SECONDS)
+            
+            if resp.status_code != 200:
+                logger.warning(f"Bing returned status {resp.status_code} for query: {query}")
+                continue
+            
+            # Extract image URLs via regex (Bing uses murl:"URL" format)
+            pattern = r'murl":"(https?://[^"]+)"'
+            matches = re.findall(pattern, resp.text)
+            
+            seen = set()
+            for url in matches:
+                if url in seen:
+                    continue
+                seen.add(url)
+                
+                if is_bad_image_url(url, category):
+                    continue
+                
+                # Decode escaped characters
+                url = url.replace("\\u002f", "/").replace("\\/", "/")
+                
+                candidates.append(ImageCandidate(
+                    url=url,
+                    thumbnail=url,
+                    title="",
+                    source="bing",
+                    width=0,
+                    height=0,
+                ))
+                
+                if len(candidates) >= max_results:
+                    break
+            
+            if candidates:
+                logger.info(f"Bing found {len(candidates)} images for query: {query}")
+                break  # Found results, stop trying other queries
         
-    except Exception as e:
-        logger.warning(f"Bing search error for '{query}': {e}")
+        except Exception as e:
+            logger.warning(f"Bing search error for '{query}': {e}")
+            continue
     
     return candidates
 
@@ -1416,10 +1530,11 @@ def search_images(
         return candidates
     
     # 3. Last resort: Bing scraping
-    logger.info(f"DuckDuckGo found nothing, trying Bing for SKU {sku}")
+    logger.info(f"   Fallback: Bing (DuckDuckGo empty)")
     candidates = search_images_bing(
         product_name=product_name,
         category=category,
+        brand=brand,
         max_results=max_results
     )
     if candidates and use_cache and cache_key:

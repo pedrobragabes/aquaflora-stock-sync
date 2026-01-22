@@ -1,7 +1,7 @@
-# 📋 Contexto Técnico - AquaFlora Stock Sync v3.1
+# 📋 Contexto Técnico - AquaFlora Stock Sync v3.2
 
 > **Documento de referência para desenvolvimento e manutenção**  
-> Última atualização: 21 Janeiro 2026
+> Última atualização: 22 Janeiro 2026
 
 ---
 
@@ -12,23 +12,25 @@
 1. Importa dados do ERP Athos (CSV)
 2. Enriquece com marca, peso, SEO
 3. Busca imagens automaticamente (premium Google + Vision ou cheap DuckDuckGo/Bing)
-4. Faz upload FTP para Hostinger
-5. Gera CSV para importação no WooCommerce
-6. Fornece dashboard web e bot Discord
+4. Organiza imagens por categoria
+5. Faz upload FTP para Hostinger
+6. Gera CSV para importação no WooCommerce
+7. Fornece dashboard web e bot Discord
 
 ---
 
 ## 📊 Números do Projeto
 
-| Métrica                     | Valor  |
-| --------------------------- | ------ |
-| Produtos no ERP             | 4.352  |
-| Departamentos               | 12     |
-| Marcas detectadas           | 160+   |
-| Semânticas Vision AI        | 80+    |
-| Produtos válidos e-commerce | ~3.962 |
-| Excluídos (automático)      | ~390   |
-| Imagens processadas         | 1.727  |
+| Métrica               | Valor  |
+| --------------------- | ------ |
+| Produtos no ERP       | 4.074+ |
+| Departamentos         | 12     |
+| Marcas detectadas     | 160+   |
+| Semânticas Vision AI  | 80+    |
+| Imagens consolidadas  | 3.206  |
+| - WooCommerce (base)  | 1.967  |
+| - Scraper (novidades) | 1.239  |
+| Cobertura de imagens  | 76%    |
 
 ---
 
@@ -44,15 +46,25 @@
 │   WooCommerce   │◀────│  CSV Export     │◀─────────────┘
 │   (Import CSV)  │     │   (main.py)     │
 └─────────────────┘     └─────────────────┘
+         ▲                      ▲
+         │                      │
+┌─────────────────┐     ┌─────────────────┐
+│   FTP Upload    │     │  Image Finder   │
+│   (Hostinger)   │     │ (multi-format)  │
+└─────────────────┘     └─────────────────┘
+         ▲                      ▲
+         │                      │
+┌─────────────────────────────────────────┐
+│        data/images/{categoria}/         │
+│   (pesca, pet, aquarismo, farmacia...)  │
+└─────────────────────────────────────────┘
          ▲
          │
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Image Scraper  │────▶│ Vision AI (opt) │────▶│   FTP Upload    │
-│ (scrape_all_images)   │ (image_scraper) │     │   (Hostinger)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-     │
-     ▼
-   DuckDuckGo/Bing (modo barato)
+┌─────────────────┐     ┌─────────────────┐
+│  Image Scraper  │────▶│ Vision AI (opt) │
+│ (DuckDuckGo/    │     │ (validação)     │
+│  Bing/Google)   │     │                 │
+└─────────────────┘     └─────────────────┘
 ```
 
 ---
@@ -65,6 +77,7 @@
 | ---------------------- | ------------------------------------- |
 | `main.py`              | CLI principal, orquestra todo o fluxo |
 | `scrape_all_images.py` | Scraper de imagens v3                 |
+| `upload_images.py`     | Upload FTP para servidor              |
 | `bot_control.py`       | Bot Discord 2.0                       |
 | `dashboard/app.py`     | FastAPI + HTMX                        |
 
@@ -88,17 +101,18 @@
 | `settings.py`         | Pydantic Settings (carrega .env)    |
 | `brands.json`         | Lista de 160+ marcas                |
 | `exclusion_list.json` | Exclusões completas para e-commerce |
-| `image_sources.json`  | Regras de fontes por categoria      |
 
-### Scripts (pasta scripts/)
+### Scripts Utilitários (scripts/)
 
-| Script                       | Função                                  |
-| ---------------------------- | --------------------------------------- |
-| `analyze_departments.py`     | Analisa departamentos do ERP            |
-| `analyze_geral_pesca.py`     | Análise específica dept Geral Pesca     |
-| `analyze_missing_images.py`  | Lista produtos sem imagem               |
-| `test_image_scraper.py`      | Testa scraper em produtos específicos   |
-| `run_scraper_background.ps1` | Roda scraper em background (PowerShell) |
+| Script                           | Função                                     |
+| -------------------------------- | ------------------------------------------ |
+| `organize_images.py`             | Organiza imagens do scraper por categoria  |
+| `organize_woocommerce_images.py` | Organiza imagens exportadas do WooCommerce |
+| `consolidate_images.py`          | Unifica imagens WC + scraper em uma pasta  |
+| `compare_images.py`              | Compara SKUs entre pastas de imagens       |
+| `analyze_departments.py`         | Analisa departamentos do ERP               |
+| `analyze_missing_images.py`      | Lista produtos sem imagem                  |
+| `test_image_scraper.py`          | Testa scraper em produtos específicos      |
 
 ---
 
@@ -119,13 +133,13 @@
 
 ```python
 RawProduct:
-  - sku: str           # Código interno
+  - sku: str           # Código interno ou EAN
   - name: str          # Descrição
   - stock: float       # Estoque
   - price: float       # Preço venda
   - cost: float        # Custo
   - department: str    # Departamento
-  - ean: str           # Código de barras (CodigoBarras)
+  - ean: str           # Código de barras
   - brand: str         # Marca
 ```
 
@@ -140,277 +154,155 @@ RawProduct:
 - Cria descrição SEO em HTML
 - Cria short_description
 
-**Exemplo de saída:**
+### 3. Image Finder (main.py)
 
-```python
-EnrichedProduct:
-  - sku: "7898242033022"
-  - name: "Sachê Special Dog Carne 100g"
-  - brand: "Special Dog"
-  - weight_kg: 0.1
-  - category: "Pet"
-  - description: "<div>...</div>"  # HTML com emojis
+**Funcionalidade:** Busca imagens locais para cada produto.
+
+**Algoritmo:**
+
+1. Tenta `data/images/{categoria}/{sku}.{ext}` (extensões: jpg, jpeg, png, webp, avif, gif)
+2. Fallback: busca recursiva em `data/images/**/{sku}.{ext}`
+3. Prioridade de extensões: jpg > jpeg > png > webp > avif > gif
+
+**Categorias suportadas:**
+
+- pesca, pet, aquarismo, passaros, racao
+- farmacia, aves, piscina, cutelaria, tabacaria, geral
+
+### 4. Image Scraper (scrape_all_images.py)
+
+**Modos de busca:**
+
+- **Premium:** Google Custom Search + Vision AI (validação semântica)
+- **Cheap:** DuckDuckGo + Bing (fallback, sem validação AI)
+
+**Features:**
+
+- Progresso salvo automaticamente (retomável)
+- Cache de buscas por SKU
+- Cache de Vision AI
+- Paralelismo configurável (--workers)
+- Organização automática por categoria
+
+### 5. CSV Export (main.py)
+
+**Modos:**
+
+- **FULL:** Nome, descrição, imagens, preço, estoque, peso, marca
+- **LITE:** Só preço e estoque (preserva SEO manual)
+- **TESTE:** Só categorias PET, PESCA, AQUARISMO
+
+**Campos WooCommerce:**
+
+```
+SKU, Name, Description, Short description, Regular price,
+Stock, Categories, Images, Weight (kg), Brands,
+Tax status, In stock?, Published, Visibility
 ```
 
-### 3. Export CSV WooCommerce (main.py)
+---
 
-**Formato PT-BR com colunas:**
+## 🖼️ Sistema de Imagens
+
+### Organização
 
 ```
-ID, Tipo, SKU, Nome, Publicado, Em destaque?, Visibilidade no catálogo,
-Descrição curta, Descrição, Preço promocional, Preço normal,
-Categorias, Tags, Imagens, Limite de downloads, Dias para expirar...
+data/images/
+├── pesca/          # GERAL PESCA, PESCA
+├── pet/            # PET
+├── aquarismo/      # AQUARISMO
+├── passaros/       # PÁSSAROS
+├── racao/          # RAÇÃO
+├── farmacia/       # FARMÁCIA
+├── aves/           # AVES
+├── piscina/        # PISCINA
+├── cutelaria/      # CUTELARIA
+├── tabacaria/      # TABACARIA
+├── geral/          # Outros
+└── sem_categoria/  # Fallback
 ```
 
-**Campos importantes:**
+### Nomenclatura
 
-- **Categorias**: Departamento do ERP (Pet, Pesca, Aquarismo, etc.)
-- **Tags**: Categoria + Marca (ex: "Pet, Special Dog")
-- **Marcas**: Marca detectada pelo enricher
-- **Imagens**: URL pública no Hostinger (https://aquafloragroshop.com.br/wp-content/uploads/produtos/{sku}.jpg)
+Arquivos seguem padrão: `{SKU}.{extensão}`
 
-### 3.1 Modos de busca de imagem
+- SKU pode ser código interno ou EAN
+- Extensão detectada automaticamente
 
-### 3.1 Modos de busca de imagem
+### Consolidação
 
-- **Premium (default)**: Google Custom Search + Vision AI
-- **Cheap**: DuckDuckGo + Bing (sem custos de API)
+O script `scripts/consolidate_images.py` unifica:
 
-**Config (.env):**
+1. **Base:** Imagens do WooCommerce (exportação)
+2. **Novidades:** Imagens do scraper (apenas SKUs não existentes)
+
+---
+
+## ⚙️ Configurações (.env)
 
 ```env
-# Premium
-GOOGLE_API_KEY=AIzaSy...
-GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
-VISION_AI_ENABLED=true
-
-# Cheap (opcional)
-IMAGE_SEARCH_MODE=cheap
-```
-
-**Regras de fontes por categoria (opcional):**
-
-- `config/image_sources.json`
-
-**Cache e relatórios:**
-
-- `data/search_cache.json` (cache por SKU)
-- `data/reports/image_success_*.json` (taxa de sucesso por categoria/marca)
-
-### 4. Sistema de Exclusões
-
-**config/exclusion_list.json:**
-
-```json
-{
-  "exclude_departments": ["FERRAMENTAS", "INSUMO", "INSUMOS"],
-  "exclude_keywords": {
-    "pereciveis": ["isca viva", "minhoca viva", "larva"],
-    "bebidas": ["refrigerante", "cerveja", "agua mineral"],
-    "tabaco": ["cigarro", "fumo"],
-    "muito_pesados": ["25kg", "50kg", "20kg"],
-    "muito_grandes_volumosos": [
-      "bebedouro galinha",
-      "caixa d'agua",
-      "gaiola grande"
-    ],
-    "dificil_embalar": ["vara de bambu", "cano pvc"],
-    "decoracao_aquario": ["pedra dolomita", "cascalho"],
-    "itens_pequenos": ["anzol avulso", "miçanga"],
-    "frageis_quebraveis": ["aquario vidro", "vaso ceramica grande"]
-  },
-  "max_weight_kg": 15.0,
-  "priority_categories_for_test": ["PET", "PESCA", "AQUARISMO"]
-}
-```
-
-**Lógica de Exclusão:**
-
-1. **Departamento** - FERRAMENTAS, INSUMO (194 produtos)
-2. **Keywords** - Perecíveis, bebidas, frágeis, volumosos (164 produtos)
-3. **Peso** - > 15kg automaticamente excluído (32 produtos)
-
-**Exceção:** Ração > 15kg é mantida (usa plástico stretch para embalar)
-
-**Outliers de Peso:**
-
-- Regras configuráveis por categoria em `config/exclusion_list.json` → `weight_outlier_rules`
-- Relatórios gerados em `data/reports/weight_outliers_*.json`
-
-### 5. Image Scraper v3 (scrape_all_images.py)
-
-**Pipeline:**
-
-```
-1. Carrega produtos do CSV
-2. Aplica exclusões (departamento + keywords)
-3. Ordena por prioridade (estoque > 0 primeiro)
-4. Para cada produto:
-   a. Verifica se imagem existe → SKIP
-   b. Verifica cache de Vision → usa score
-   c. Busca no Google Custom Search
-   d. Analisa com Vision AI
-   e. Valida score semântico
-   f. Salva imagem 800x800
-5. Salva progresso a cada 20 produtos
-```
-
-**Thresholds:**
-| Departamento | Score Mínimo |
-|--------------|--------------|
-| PET, RACAO, PESCA | 0.45 |
-| Demais (difíceis) | 0.35 |
-
-### 6. FTP Upload (Hostinger)
-
-**Configuração:**
-
-```python
-FTP_HOST = "147.93.38.37"
-FTP_PORT = 21
-FTP_USER = "u599889telefo@aquafloragroshop.com.br"
-FTP_PATH = "/domains/aquafloragroshop.com.br/public_html/wp-content/uploads/produtos/"
-```
-
-**URL Pública:**
-
-```
-https://aquafloragroshop.com.br/wp-content/uploads/produtos/{sku}.jpg
-```
-
-### 7. Dashboard (dashboard/app.py)
-
-**Stack:**
-
-- FastAPI + Jinja2 + HTMX
-- APScheduler para sync agendado
-- HTTP Basic Auth opcional
-
-**Endpoints principais:**
-| Endpoint | Função |
-|----------|--------|
-| `GET /` | Dashboard principal |
-| `GET /images` | Curadoria de imagens |
-| `POST /api/sync` | Iniciar sync |
-| `GET /api/images/missing` | Produtos sem imagem |
-| `GET /api/images/scraper-progress` | Status scraper |
-| `GET /metrics` | Prometheus metrics |
-
----
-
-## 💾 Banco de Dados (SQLite)
-
-### Tabela: products
-
-```sql
-CREATE TABLE products (
-    sku TEXT PRIMARY KEY,
-    name TEXT,
-    woo_id INTEGER,           -- ID no WooCommerce
-    last_hash_full TEXT,      -- Hash de todos os campos
-    last_hash_fast TEXT,      -- Hash só preço/estoque
-    last_price REAL,          -- Último preço sincronizado
-    last_sync_at DATETIME,
-    exists_on_site INTEGER,   -- 1 = mapeado do site
-    created_at DATETIME
-);
-```
-
----
-
-## 🚀 Comandos CLI
-
-### Importação Completa
-
-```powershell
-python main.py --input data/input/Athos.csv
-```
-
-### Modo Teste (apenas PET, PESCA, AQUARISMO)
-
-```powershell
-python main.py --input data/input/Athos.csv --teste
-```
-
-### Modo LITE (só preço/estoque)
-
-```powershell
-python main.py --input data/input/Athos.csv --lite
-```
-
-### Dry Run (simula sem alterar)
-
-```powershell
-python main.py --input data/input/Athos.csv --dry-run
-```
-
-### Scraper de Imagens
-
-```powershell
-python scrape_all_images.py --limit 100 --dept PET
-```
-
-### Upload FTP
-
-```powershell
-python -c "from src.image_scraper import upload_images_ftp; upload_images_ftp()"
-```
-
----
-
-## 📝 Variáveis de Ambiente
-
-### Obrigatórias
-
-```env
-WOO_URL=https://aquafloragroshop.com.br
+# === WooCommerce ===
+WOO_URL=https://sualoja.com.br
 WOO_CONSUMER_KEY=ck_xxx
 WOO_CONSUMER_SECRET=cs_xxx
-```
 
-### FTP (para upload de imagens)
+# === FTP/Imagens ===
+IMAGE_BASE_URL=https://sualoja.com.br/wp-content/uploads/produtos/
+IMAGE_FTP_HOST=sualoja.com.br
+IMAGE_FTP_USER=usuario
+IMAGE_FTP_PASSWORD=senha
 
-```env
-FTP_HOST=147.93.38.37
-FTP_USER=u599889telefo@aquafloragroshop.com.br
-FTP_PASS=sua_senha
-```
-
-### Imagens (recomendado)
-
-```env
+# === Google APIs ===
 GOOGLE_API_KEY=AIzaSy...
-GOOGLE_SEARCH_ENGINE_ID=75f6d255f...
+GOOGLE_SEARCH_ENGINE_ID=xxx
 VISION_AI_ENABLED=true
-VISION_MIN_CONFIDENCE=0.6
-```
 
-### Opcionais
-
-```env
-# Discord
+# === Discord ===
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-DISCORD_BOT_TOKEN=MTI...
 
-# Segurança
-PRICE_GUARD_MAX_VARIATION=40
+# === Operação ===
 DRY_RUN=false
 SYNC_ENABLED=true
-
-# Dashboard
-DASHBOARD_AUTH_ENABLED=false
-DASHBOARD_USERNAME=admin
-DASHBOARD_PASSWORD=secret
 ```
 
 ---
 
-## 📞 Suporte
+## 📈 Métricas de Qualidade
 
-- **Logs:** `logs/sync_*.log` e `logs/scraper_full.log`
-- **Erros:** Verificar `get_errors` no dashboard
-- **Discord:** Bot responde `!status` e `!ajuda`
+### Cobertura de Imagens
+
+- Total de produtos: 4.074
+- Com imagem: 3.101 (76%)
+- Sem imagem: 973 (24%)
+
+### Fontes de Imagens
+
+- WooCommerce (exportação): 1.967 (61%)
+- Scraper (novidades): 1.239 (39%)
+
+### Extensões
+
+- WEBP: maioria das imagens WooCommerce
+- JPG: maioria das imagens scraper
+- PNG, AVIF, GIF: algumas
 
 ---
 
-_Documento atualizado - v3.1 - 21/01/2026_
+## 🚀 Próximos Passos
+
+1. **Automatização 24h:** Cron job ou Windows Task Scheduler
+2. **Dashboard aprimorado:** Mais estatísticas, gráficos
+3. **Scraper incremental:** Só produtos novos/alterados
+4. **Backup automático:** Antes de cada sync
+
+---
+
+## 📝 Histórico de Versões
+
+| Versão | Data       | Mudanças                                                           |
+| ------ | ---------- | ------------------------------------------------------------------ |
+| 3.2    | 22/01/2026 | Consolidação de imagens, multi-extensão, organização por categoria |
+| 3.1    | 21/01/2026 | Modo cheap melhorado (DDGS API fix), queries de pesca              |
+| 3.0    | 19/01/2026 | Dashboard HTMX, scraper v3, Vision AI                              |
+| 2.0    | 15/01/2026 | Bot Discord, notificações                                          |
+| 1.0    | 10/01/2026 | Versão inicial                                                     |

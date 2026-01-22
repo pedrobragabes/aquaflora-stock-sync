@@ -19,16 +19,18 @@
         </div>
     </header>
 
+    <div id="action-result"></div>
+
     <div class="actions-grid">
         {% for section in actions %}
         <section class="card action-section" data-section="{{ section.key }}">
             <div class="card-header">
                 <h2>{{ section.icon }} {{ section.title }}</h2>
-                <span class="stats-badge">{{ section.items | length }} ações</span>
+                <span class="stats-badge">{{ section['items'] | length }} ações</span>
             </div>
             <div class="card-body">
                 <ul class="action-list">
-                    {% for item in section.items %}
+                    {% for item in section['items'] %}
                     <li class="action-item" data-search="{{ (item.title ~ ' ' ~ item.description ~ ' ' ~ (item.command or '')) | lower }}">
                         <label class="checkbox-label action-checkbox">
                             <input type="checkbox" class="action-check" data-action-id="{{ item.id }}">
@@ -36,7 +38,15 @@
                         </label>
                         <p class="action-desc">{{ item.description }}</p>
                         {% if item.command %}
-                        <div class="action-command"><code>{{ item.command }}</code></div>
+                        <div class="action-command">
+                            <code>{{ item.command }}</code>
+                            <form class="action-run" hx-post="/api/actions/run" hx-target="#action-result" hx-swap="innerHTML">
+                                <input type="hidden" name="action_id" value="{{ item.id }}">
+                                <button type="submit" class="btn btn-sm btn-primary" {% if '<' in item.command or '>' in item.command %}disabled{% endif %}>
+                                    ▶️ Rodar
+                                </button>
+                            </form>
+                        </div>
                         {% endif %}
                     </li>
                     {% endfor %}

@@ -6,7 +6,10 @@
 <div class="dashboard images-page">
     <!-- Header -->
     <header class="dashboard-header">
-        <h1>📸 Curadoria de Imagens</h1>
+        <div class="header-text">
+            <h1>📸 Curadoria de Imagens</h1>
+            <p class="muted">Selecione um produto, escolha a melhor imagem e avance rapidamente.</p>
+        </div>
         <div class="quick-actions">
             <div class="search-mode">
                 <label for="search-mode">Modo:</label>
@@ -40,9 +43,18 @@
         <aside class="images-sidebar card">
             <div class="card-header">
                 <h2>📋 Pendentes</h2>
-                <button class="btn btn-sm" hx-get="/partials/pending-list" hx-target="#pending-list">
-                    🔄
-                </button>
+                <div class="sidebar-actions">
+                    <button class="btn btn-sm" hx-get="/partials/pending-list" hx-target="#pending-list">
+                        🔄
+                    </button>
+                </div>
+            </div>
+            <div class="sidebar-search">
+                <input id="pending-search" class="form-control" placeholder="Buscar SKU ou nome" oninput="filterPending()">
+                <label class="checkbox-label checkbox-inline">
+                    <input type="checkbox" id="pending-only-unchecked" onchange="filterPending()">
+                    <span>Somente não curados</span>
+                </label>
             </div>
             <div class="card-body" id="pending-list" hx-get="/partials/pending-list" hx-trigger="load">
                 <!-- Lista carregada via HTMX -->
@@ -53,8 +65,14 @@
         <!-- Main: Grid de candidatos -->
         <main class="images-main card">
             <div class="card-header">
-                <h2 id="current-product-title">Selecione um produto</h2>
+                <div class="product-header">
+                    <h2 id="current-product-title">Selecione um produto</h2>
+                    <p id="current-product-subtitle" class="muted"></p>
+                </div>
                 <div class="product-actions" id="product-actions" style="display: none;">
+                    <button class="btn btn-sm" id="copy-sku-btn" onclick="copySku()">
+                        📋 Copiar SKU
+                    </button>
                     <button class="btn btn-sm" id="skip-btn" onclick="skipProduct()">
                         ⏭️ Pular
                     </button>
@@ -97,6 +115,8 @@
 
         // Update title
         document.getElementById('current-product-title').textContent =
+            `${productName || 'Produto selecionado'}`;
+        document.getElementById('current-product-subtitle').textContent =
             `SKU: ${sku}`;
 
         // Show actions
@@ -133,6 +153,7 @@
                 document.getElementById('image-candidates').innerHTML =
                     '<div class="empty-state"><p>✅ Imagem salva! Selecione outro produto.</p></div>';
                 document.getElementById('product-actions').style.display = 'none';
+                document.getElementById('current-product-subtitle').textContent = '';
                 currentSku = null;
             });
     }
@@ -144,6 +165,7 @@
         document.getElementById('image-candidates').innerHTML =
             '<div class="empty-state"><p>⏭️ Produto pulado. Selecione outro.</p></div>';
         document.getElementById('product-actions').style.display = 'none';
+        document.getElementById('current-product-subtitle').textContent = '';
         currentSku = null;
     }
 
@@ -161,6 +183,22 @@
                 // Refresh pending list
                 htmx.ajax('GET', '/partials/pending-list', { target: '#pending-list' });
             });
+    }
+
+    function copySku() {
+        if (!currentSku) return;
+        navigator.clipboard?.writeText(currentSku);
+    }
+
+    function filterPending() {
+        const query = document.getElementById('pending-search').value.trim().toLowerCase();
+        const onlyUnchecked = document.getElementById('pending-only-unchecked').checked;
+        document.querySelectorAll('.pending-item').forEach((item) => {
+            const text = item.textContent.toLowerCase();
+            const matchesQuery = !query || text.includes(query);
+            const matchesUnchecked = !onlyUnchecked || !item.classList.contains('curated');
+            item.style.display = matchesQuery && matchesUnchecked ? 'block' : 'none';
+        });
     }
 </script>
 
@@ -183,6 +221,20 @@
 
     .images-sidebar .card-body {
         padding: 0;
+    }
+
+    .sidebar-search {
+        padding: 0.75rem 1rem 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .product-header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
     }
 
     .pending-item {

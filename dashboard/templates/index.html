@@ -6,16 +6,25 @@
 <div class="dashboard">
     <!-- Header com ações rápidas -->
     <header class="dashboard-header">
-        <h1>📦 Painel de Controle</h1>
+        <div class="header-text">
+            <h1>📦 Painel de Controle</h1>
+            <p class="muted">Gerencie estoque, sincronização e uploads com visão geral rápida.</p>
+        </div>
         <div class="quick-actions">
             <button class="btn btn-primary btn-lg" hx-post="/api/sync/run"
                 hx-vals='{"filename": "{{ input_files[0].name if input_files else '' }}", "lite_mode": true, "allow_create": false}'
                 hx-target="#sync-result" hx-indicator="#loading" {% if not input_files %}disabled{% endif %}>
-                🚀 Sincronizar Agora
+                🚀 Sincronizar (LITE)
+            </button>
+            <button class="btn btn-secondary" hx-post="/api/sync/run"
+                hx-vals='{"filename": "{{ input_files[0].name if input_files else '' }}", "lite_mode": false, "allow_create": false}'
+                hx-target="#sync-result" hx-indicator="#loading" {% if not input_files %}disabled{% endif %}>
+                ⚡ Sincronizar (FULL)
             </button>
             <button class="btn btn-secondary" hx-post="/api/map-site" hx-target="#sync-result" hx-indicator="#loading">
                 🗺️ Mapear Site
             </button>
+            <a class="btn btn-secondary" href="/actions">✅ Ações</a>
         </div>
     </header>
 
@@ -49,6 +58,41 @@
             <div class="metric-icon">🛡️</div>
             <div class="metric-value">{{ last_run.price_warnings | length if last_run else 0 }}</div>
             <div class="metric-label">Bloqueados</div>
+        </div>
+    </section>
+
+    <!-- Fluxo rápido -->
+    <section class="flow-grid">
+        <div class="flow-card">
+            <div class="flow-icon">🖼️</div>
+            <div>
+                <h3>Buscar Imagens</h3>
+                <p>Rodar scraper ou usar curadoria.</p>
+                <div class="flow-actions">
+                    <a class="btn btn-sm btn-secondary" href="/images">Curadoria</a>
+                    <a class="btn btn-sm btn-secondary" href="/actions">Comandos</a>
+                </div>
+            </div>
+        </div>
+        <div class="flow-card">
+            <div class="flow-icon">📤</div>
+            <div>
+                <h3>Upload</h3>
+                <p>Enviar imagens para o servidor.</p>
+                <div class="flow-actions">
+                    <a class="btn btn-sm btn-secondary" href="/actions">Ver comandos</a>
+                </div>
+            </div>
+        </div>
+        <div class="flow-card">
+            <div class="flow-icon">🧾</div>
+            <div>
+                <h3>Gerar CSV</h3>
+                <p>Exportar para importação no WooCommerce.</p>
+                <div class="flow-actions">
+                    <a class="btn btn-sm btn-secondary" href="/actions">Comandos</a>
+                </div>
+            </div>
         </div>
     </section>
 

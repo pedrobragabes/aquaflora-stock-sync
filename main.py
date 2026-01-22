@@ -534,14 +534,39 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
     logger = logging.getLogger(__name__)
     
     def _find_image_path(sku: str, category: str) -> Optional[Path]:
+        """
+        Busca imagem do produto por SKU.
+        
+        Procura em:
+        1. data/images/{categoria}/{sku}.{ext}
+        2. data/images/**/{sku}.{ext} (busca recursiva)
+        
+        Extensões suportadas: jpg, jpeg, png, webp, avif, gif
+        Prioridade: jpg > png > webp > avif > jpeg > gif
+        """
         if not sku:
             return None
+        
+        # Extensões em ordem de prioridade
+        extensions = ['.jpg', '.png', '.webp', '.avif', '.jpeg', '.gif']
+        
         cat_folder = category_to_folder(category)
-        direct = image_dir / cat_folder / f"{sku}.jpg"
-        if direct.exists():
-            return direct
-        matches = list(image_dir.rglob(f"{sku}.jpg"))
-        return matches[0] if matches else None
+        cat_path = image_dir / cat_folder
+        
+        # 1. Busca direta na pasta da categoria
+        if cat_path.exists():
+            for ext in extensions:
+                direct = cat_path / f"{sku}{ext}"
+                if direct.exists():
+                    return direct
+        
+        # 2. Busca recursiva em todas as pastas
+        for ext in extensions:
+            matches = list(image_dir.rglob(f"{sku}{ext}"))
+            if matches:
+                return matches[0]
+        
+        return None
 
     with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
@@ -571,8 +596,8 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
             peso_display = f"{peso_total:.3f} Kg" if peso_total else ""
             peso_unit_display = f"{peso_unit:.3f} Kg" if peso_unit else ""
             
-                        # Descrição completa HTML com marca e peso
-                        if p.brand and peso_total:
+            # Descrição completa HTML com marca e peso
+            if p.brand and peso_total:
                 description = f'''<div class="product-description">
 <h2>{p.name}</h2>
 <p>Produto <strong>{p.brand}</strong> da linha {p.category}. Disponível na <strong>AquaFlora Agroshop</strong> com <strong>{peso_display}</strong> e melhor custo-benefício.</p>

@@ -869,14 +869,14 @@ def write_success_report(progress: dict) -> Optional[Path]:
     for dept, data in sorted(by_department.items(), key=lambda x: _rate(x[1]), reverse=True):
         lines.append(
             f"- **{dept}**: {data.get('success', 0)}/{data.get('total', 0)} "
-            f"({ _rate(data):.1f }% sucesso)"
+            f"({_rate(data):.1f}% sucesso)"
         )
     lines.append("")
     lines.append("## Por Marca")
     for brand, data in sorted(by_brand.items(), key=lambda x: _rate(x[1]), reverse=True):
         lines.append(
             f"- **{brand}**: {data.get('success', 0)}/{data.get('total', 0)} "
-            f"({ _rate(data):.1f }% sucesso)"
+            f"({_rate(data):.1f}% sucesso)"
         )
 
     with open(md_path, "w", encoding="utf-8") as f:

@@ -15,14 +15,13 @@
 <body>
     <nav class="navbar">
         <div class="navbar-brand">
-            <img src="https://aquafloragroshop.com.br/wp-content/uploads/2021/08/cropped-logo-aquaflora-agroshop-1.png"
-                alt="AquaFlora" class="logo">
+            <img src="/assets/logo.png" alt="AquaFlora" class="logo">
             <span class="brand-text">Stock Sync</span>
         </div>
         <div class="navbar-links">
-            <a href="/" class="nav-link">📦 Estoque</a>
-            <a href="/images" class="nav-link">📸 Imagens</a>
-            <a href="/actions" class="nav-link">✅ Ações</a>
+            <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">📦 Estoque</a>
+            <a href="/images" class="nav-link {% if request.url.path.startswith('/images') %}active{% endif %}">📸 Imagens</a>
+            <a href="/actions" class="nav-link {% if request.url.path.startswith('/actions') %}active{% endif %}">✅ Ações</a>
         </div>
         <div class="navbar-status" hx-get="/partials/status" hx-trigger="every 3s">
             {% include "partials/status.html" %}

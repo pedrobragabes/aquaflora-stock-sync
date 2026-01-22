@@ -6,6 +6,7 @@ FastAPI application for controlling stock synchronization.
 import json
 import logging
 import asyncio
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -47,6 +48,7 @@ state = AppState()
 scheduler = AsyncIOScheduler()
 SCHEDULER_JOB_ID = "daily_sync"
 WHITELIST_JOB_ID = "weekly_whitelist"
+ACTION_LOG_FILE = Path("logs/actions.log")
 
 # Security for Basic Auth
 security = HTTPBasic()
@@ -150,8 +152,10 @@ app = FastAPI(
 # Mount static files and templates
 static_path = Path(__file__).parent / "static"
 templates_path = Path(__file__).parent / "templates"
+assets_path = Path(__file__).parent
 
 app.mount("/static", StaticFiles(directory=static_path), name="static")
+app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 templates = Jinja2Templates(directory=templates_path)
 
 
@@ -393,6 +397,33 @@ def get_action_catalog() -> list:
     ]
 
 
+def get_action_command(action_id: str) -> Optional[str]:
+    """Resolve command by action id from catalog."""
+    for section in get_action_catalog():
+        for item in section.get("items", []):
+            if item.get("id") == action_id:
+                return item.get("command") or ""
+    return None
+
+
+def run_action_command(action_id: str, command: str):
+    """Run an action command asynchronously and log output."""
+    ACTION_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(ACTION_LOG_FILE, "a", encoding="utf-8") as log_file:
+        log_file.write(f"\n[{timestamp}] ACTION {action_id}: {command}\n")
+        try:
+            subprocess.Popen(
+                command,
+                shell=True,
+                stdout=log_file,
+                stderr=log_file,
+                cwd=str(Path(__file__).parent.parent),
+            )
+        except Exception as e:
+            log_file.write(f"ERROR: {e}\n")
+
+
 def scheduled_sync_job():
     """
     Job function called by APScheduler at scheduled time.
@@ -602,6 +633,23 @@ async def api_run_sync(
     background_tasks.add_task(run_sync_task, filepath, lite_mode, allow_create)
     
     return {"success": True, "message": f"Sync iniciado: {filename}"}
+
+
+@app.post("/api/actions/run", response_class=HTMLResponse)
+async def api_actions_run(
+    background_tasks: BackgroundTasks,
+    action_id: str = Form(...),
+):
+    """Run a predefined action command."""
+    command = get_action_command(action_id)
+    if command is None:
+        return HTMLResponse("<div class='toast error'>❌ Ação não encontrada.</div>", status_code=404)
+
+    if not command or "<" in command or ">" in command:
+        return HTMLResponse("<div class='toast warning'>⚠️ Esta ação exige parâmetros manuais.</div>", status_code=400)
+
+    background_tasks.add_task(run_action_command, action_id, command)
+    return HTMLResponse("<div class='toast success'>✅ Ação iniciada em background.</div>")
 
 
 @app.post("/api/sync/upload")
