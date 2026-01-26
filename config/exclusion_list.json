@@ -1,13 +1,12 @@
 {
-  "_comment": "Lista de exclusão SIMPLIFICADA - só o essencial",
-  "_updated": "2026-01-21",
-  
+  "_comment": "Lista de exclusão - Atualizada com análise de cobertura de imagens",
+  "_updated": "2026-01-26",
+  "_coverage_analysis": "FERRAMENTAS: 11.5% cobertura (108/122 sem imagem)",
   "exclude_departments": [
     "FERRAMENTAS",
     "INSUMO",
     "INSUMOS"
   ],
-  
   "exclude_keywords": {
     "pereciveis": [
       "isca viva",
@@ -19,13 +18,18 @@
       "cerveja",
       "vinho",
       "agua mineral",
-      "refrigerante"
+      "refrigerante",
+      "brahma",
+      "heineken",
+      "skol",
+      "coca cola"
     ],
     "tabaco": [
       "cigarro",
       "fumo de corda",
       "tabaco",
-      "charuto"
+      "charuto",
+      "dichavador"
     ],
     "muito_pesados": [
       "25kg",
@@ -51,18 +55,31 @@
       "estaca",
       "vara de pesca 5m",
       "vara de pesca 6m"
+    ],
+    "produtos_especificos_pesca": [
+      "anteninha empanada",
+      "chicote anteninha",
+      "engate rapido",
+      "eva formato"
+    ],
+    "ferramentas_construcao": [
+      "alicate",
+      "chave",
+      "martelo",
+      "serrote",
+      "lima",
+      "nivel",
+      "esquadro",
+      "trena"
     ]
   },
-  
+  "exclude_brands": [],
   "exclude_skus": [],
-  
   "max_weight_kg": 20.0,
-  
   "allow_heavy_keywords": [
     "ração",
     "racao"
   ],
-
   "weight_outlier_rules": {
     "default_max_kg": 50.0,
     "category_max_kg": {
@@ -75,10 +92,10 @@
       "tabacaria": 2.0
     }
   },
-  
   "priority_categories_for_test": [
     "PET",
     "PESCA",
     "AQUARISMO"
-  ]
+  ],
+  "min_image_coverage_threshold": 0.3
 }
