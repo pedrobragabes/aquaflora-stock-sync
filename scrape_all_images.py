@@ -741,6 +741,9 @@ def run_scraper(
                 logger.warning(f"   ❌ FAIL")
                 if sku not in progress['failed']:
                     progress['failed'].append(sku)
+                # Remove from completed if present (consistency fix)
+                if sku in progress['completed']:
+                    progress['completed'] = [s for s in progress['completed'] if s != sku]
                 progress['stats']['total_failed'] += 1
                 update_success_metrics(progress, product, "failed")
 

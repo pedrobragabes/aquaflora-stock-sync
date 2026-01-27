@@ -129,7 +129,58 @@ class VisionAnalysisResult:
 # TEXT PROCESSING (Reused from legacy scraper)
 # =============================================================================
 
+# Mapeamento de abreviações comuns em nomes de rações/pet food
+PET_FOOD_ABBREVIATIONS = {
+    # Porte/Raça
+    "RMG": "RAÇAS MÉDIAS GRANDES",
+    "RGM": "RAÇAS GRANDES MÉDIAS", 
+    "RPM": "RAÇAS PEQUENAS MÉDIAS",
+    "RP": "RAÇAS PEQUENAS",
+    "RG": "RAÇAS GRANDES",
+    "RM": "RAÇAS MÉDIAS",
+    # Idade/Fase
+    "AD": "ADULTO",
+    "FIL": "FILHOTE",
+    "CAST": "CASTRADO",
+    "SEN": "SÊNIOR",
+    "JR": "JÚNIOR",
+    # Sabores
+    "FR": "FRANGO",
+    "CA": "CARNE",
+    "PX": "PEIXE",
+    "VEG": "VEGETAIS",
+    # Outros
+    "CAES": "CÃES",
+    "CAO": "CÃO",
+}
+
+
+def expand_pet_food_abbreviations(name: str) -> str:
+    """
+    Expand common abbreviations in pet food product names.
+    
+    Examples:
+        "BIONATURAL CAES RMG AD FRANGO" -> "BIONATURAL CÃES RAÇAS MÉDIAS GRANDES ADULTO FRANGO"
+        "GOLDEN CAES AD RP CARNE" -> "GOLDEN CÃES ADULTO RAÇAS PEQUENAS CARNE"
+    """
+    if not name:
+        return ""
+    
+    result = name.upper()
+    
+    # Expande abreviações (processa do maior para menor para evitar conflitos)
+    sorted_abbrevs = sorted(PET_FOOD_ABBREVIATIONS.items(), key=lambda x: len(x[0]), reverse=True)
+    
+    for abbrev, full in sorted_abbrevs:
+        # Match word boundaries to avoid partial replacements
+        pattern = r'\b' + re.escape(abbrev) + r'\b'
+        result = re.sub(pattern, full, result, flags=re.IGNORECASE)
+    
+    return result
+
+
 def clean_product_name(name: str, preserve_model: bool = False) -> str:
+
     """
     Clean product name for search queries.
     Removes promotional text, codes, special characters, and normalizes whitespace.
@@ -439,9 +490,12 @@ def build_search_query(product_name: str, category: str = "", sku: str = "") -> 
     
     Adds relevant context keywords to improve search accuracy.
     """
-    clean_name = clean_product_name(product_name)
+    # Expand pet food abbreviations before cleaning (RMG -> RAÇAS MÉDIAS GRANDES, etc.)
+    expanded_name = expand_pet_food_abbreviations(product_name)
+    clean_name = clean_product_name(expanded_name)
     if not clean_name or len(clean_name.split()) < 2:
         return ""
+
     
     # Palavras-chave de contexto por categoria
     CATEGORY_CONTEXT = {

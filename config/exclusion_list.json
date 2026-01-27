@@ -1,6 +1,6 @@
 {
   "_comment": "Lista de exclusão - Atualizada com análise de cobertura de imagens",
-  "_updated": "2026-01-26",
+  "_updated": "2026-01-27",
   "_coverage_analysis": "FERRAMENTAS: 11.5% cobertura (108/122 sem imagem)",
   "exclude_departments": [
     "FERRAMENTAS",
@@ -8,6 +8,83 @@
     "INSUMOS"
   ],
   "exclude_keywords": {
+    "peixes_vivos": [
+      "peixe ",
+      "betta",
+      "kinguio",
+      "carpa ",
+      "oscar ",
+      "acara ",
+      "tetra ",
+      "molinesia",
+      "platy",
+      "barbo ",
+      "cascudo",
+      "neon",
+      "colisa",
+      "labeo",
+      "pangassus",
+      "ciclideos",
+      "tricogaster",
+      "corridora",
+      "danio"
+    ],
+    "viveiros_gaiolas": [
+      "viveiro",
+      "covo ",
+      "galinheiro",
+      "cercado",
+      "londrina"
+    ],
+    "construcao_geral": [
+      "viapol",
+      "massa f-12",
+      "massa f12",
+      "impermeabilizante",
+      "vedacit",
+      "neutrol",
+      "massa corrida",
+      "cimento",
+      "argamassa"
+    ],
+    "aquarios_beteiras": [
+      "aquario ret",
+      "aquario dec",
+      "beteira",
+      "aquario kit"
+    ],
+    "muito_grandes": [
+      "caiaque",
+      "caiaca",
+      "lona de estufa",
+      "sombrite",
+      "bebedouro galinha",
+      "caixa d'agua",
+      "caixa dagua",
+      "casa cachorro grande",
+      "gaiola grande",
+      "viveiro grande",
+      "galinheiro"
+    ],
+    "telas_cercas": [
+      "tela mangueirao",
+      "tela viveiro",
+      "tela pinteiro",
+      "tela galinheiro",
+      "tela ciranda",
+      "tela mosquiteiro"
+    ],
+    "varas_bambu": [
+      "vara de bambu",
+      "vara bambu"
+    ],
+    "paineis": [
+      "painel aquario"
+    ],
+    "servicos": [
+      "frete",
+      "taxa de entrega"
+    ],
     "pereciveis": [
       "isca viva",
       "minhoca viva",
@@ -37,15 +114,6 @@
       "saco 25",
       "saco 50",
       "40kg"
-    ],
-    "muito_grandes": [
-      "bebedouro galinha",
-      "caixa d'agua",
-      "caixa dagua",
-      "casa cachorro grande",
-      "gaiola grande",
-      "viveiro grande",
-      "galinheiro"
     ],
     "dificil_enviar": [
       "arame farpado",

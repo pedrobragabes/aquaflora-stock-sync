@@ -1,4 +1,4 @@
-# 🐠 AquaFlora Stock Sync v3.2
+# 🐠 AquaFlora Stock Sync v3.3
 
 **Sistema completo de sincronização de estoque** — Migra dados do ERP Athos para WooCommerce com imagens automáticas via IA e upload FTP.
 
@@ -12,13 +12,13 @@
 
 ## 📊 Números do Projeto
 
-| Métrica              | Valor  |
-| -------------------- | ------ |
-| Produtos no ERP      | 4.074+ |
-| Departamentos        | 12     |
-| Marcas detectadas    | 160+   |
-| Imagens organizadas  | 3.206  |
-| Cobertura de imagens | 76%    |
+| Métrica              | Valor |
+| -------------------- | ----- |
+| Produtos no ERP      | 4.352 |
+| Departamentos        | 12    |
+| Marcas detectadas    | 160+  |
+| Imagens organizadas  | 2.988 |
+| Cobertura de imagens | 68.7% |
 
 ---
 
@@ -34,6 +34,7 @@ Sistema completo para e-commerce que:
 6. **Exporta CSV WooCommerce** → Formato PT-BR com URLs públicas
 7. **Dashboard Web** → Controle visual completo
 8. **Bot Discord** → Comandos remotos
+9. **Análise de produtos faltantes** → Script dedicado para identificar gaps
 
 ---
 
@@ -89,16 +90,19 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 # Encoding UTF-8 no Windows
 $env:PYTHONIOENCODING="utf-8"
 
-# PASSO 1: Buscar imagens (modo barato, rápido)
+# PASSO 1: Analisar produtos faltando imagens
+python scripts/analyze_missing_products.py
+
+# PASSO 2: Buscar imagens (modo barato, rápido)
 python scrape_all_images.py --cheap --stock-only --workers 4
 
-# PASSO 2: Upload para servidor (se configurado FTP)
+# PASSO 3: Upload para servidor (se configurado FTP)
 python upload_images.py
 
-# PASSO 3: Gerar CSV para WooCommerce
+# PASSO 4: Gerar CSV para WooCommerce
 python main.py --input data/input/Athos.csv
 
-# PASSO 4: Importar no WooCommerce
+# PASSO 5: Importar no WooCommerce
 # WooCommerce → Produtos → Importar → Selecionar CSV gerado
 ```
 
@@ -108,38 +112,64 @@ python main.py --input data/input/Athos.csv
 
 ```
 aquaflora-stock-sync/
-├── main.py                  # CLI principal
-├── scrape_all_images.py     # Scraper de imagens v3
-├── upload_images.py         # Upload FTP
-├── bot_control.py           # Bot Discord
-├── config/
-│   ├── settings.py          # Configurações (.env)
-│   ├── brands.json          # 160+ marcas
-│   └── exclusion_list.json  # Produtos excluídos
-├── src/
-│   ├── parser.py            # Parser CSV Athos
-│   ├── enricher.py          # Enriquecimento produtos
-│   ├── image_scraper.py     # Google/Vision/DuckDuckGo
-│   ├── database.py          # SQLite + histórico
-│   ├── sync.py              # API WooCommerce
-│   └── models.py            # Pydantic models
-├── dashboard/
-│   ├── app.py               # FastAPI + HTMX
-│   └── templates/           # HTML templates
-├── scripts/
-│   ├── organize_images.py           # Organizar por categoria
-│   ├── consolidate_images.py        # Unificar imagens
-│   └── compare_images.py            # Comparar pastas
+├── main.py                   # CLI principal
+├── scrape_all_images.py      # Scraper de imagens v3
+├── upload_images.py          # Upload FTP
+├── bot_control.py            # Bot Discord
+├── tasks.ps1                 # Comandos PowerShell
+├── Makefile                  # Comandos Make
+│
+├── config/                   # Configurações
+│   ├── settings.py           # Pydantic settings (.env)
+│   ├── brands.json           # 160+ marcas
+│   ├── exclusion_list.json   # Produtos excluídos
+│   └── image_sources.json    # Regras de fontes de imagem
+│
+├── src/                      # Código principal
+│   ├── parser.py             # Parser CSV Athos
+│   ├── enricher.py           # Enriquecimento produtos
+│   ├── image_scraper.py      # Google/Vision/DuckDuckGo
+│   ├── image_curator.py      # Curadoria de imagens
+│   ├── database.py           # SQLite + histórico
+│   ├── sync.py               # API WooCommerce
+│   ├── models.py             # Pydantic models
+│   ├── notifications.py      # Discord webhooks
+│   └── exceptions.py         # Exceções customizadas
+│
+├── scripts/                  # Scripts utilitários
+│   ├── analyze_missing_products.py   # Análise de gaps
+│   ├── delete_products_by_sku.py     # Deletar produtos WC
+│   ├── remove_excluded_from_woocommerce.py
+│   ├── update_woo_image_urls.py      # Atualizar URLs
+│   ├── upload_images_ftp.py          # Upload FTP alternativo
+│   ├── upload_images_to_woocommerce.py
+│   └── .old/                 # Scripts obsoletos
+│
+├── dashboard/                # Web UI
+│   ├── app.py                # FastAPI + HTMX
+│   └── templates/
+│
+├── docs/                     # Documentação completa
+│   ├── ARCHITECTURE.md       # Arquitetura do sistema
+│   ├── CHANGELOG.md          # Histórico de versões
+│   ├── CLEANUP_SUMMARY.md    # Resumo da limpeza
+│   ├── COMANDOS.md           # Referência de comandos
+│   ├── contexto.md           # Contexto técnico
+│   ├── DEPLOY.md             # Guia de deploy
+│   └── TROUBLESHOOTING.md    # Resolução de problemas
+│
 ├── data/
-│   ├── input/               # CSVs do ERP
-│   ├── output/              # CSVs para WooCommerce
-│   └── images/              # Imagens organizadas por categoria
-│       ├── pesca/
-│       ├── pet/
-│       ├── aquarismo/
-│       └── ...
-├── logs/                    # Logs do sistema
-└── docs/                    # Documentação
+│   ├── input/                # CSVs do ERP
+│   ├── output/               # CSVs para WooCommerce
+│   ├── images/               # Imagens organizadas
+│   │   ├── pesca/
+│   │   ├── pet/
+│   │   └── ...
+│   ├── reports/              # Relatórios
+│   └── .old/                 # Dados obsoletos
+│
+├── tests/                    # Testes unitários
+└── logs/                     # Logs do sistema
 ```
 
 ---
@@ -150,19 +180,21 @@ aquaflora-stock-sync/
 
 Imagens são organizadas em `data/images/{categoria}/`:
 
-| Pasta        | Departamentos        |
-| ------------ | -------------------- |
-| `pesca/`     | GERAL PESCA, PESCA   |
-| `pet/`       | PET                  |
-| `aquarismo/` | AQUARISMO            |
-| `passaros/`  | PÁSSAROS             |
-| `racao/`     | RAÇÃO                |
-| `farmacia/`  | FARMÁCIA             |
-| `aves/`      | AVES                 |
-| `piscina/`   | PISCINA              |
-| `cutelaria/` | CUTELARIA            |
-| `tabacaria/` | TABACARIA            |
-| `geral/`     | Outros departamentos |
+| Pasta          | Departamentos        |
+| -------------- | -------------------- |
+| `pesca/`       | GERAL PESCA, PESCA   |
+| `pet/`         | PET                  |
+| `aquarismo/`   | AQUARISMO            |
+| `passaros/`    | PÁSSAROS             |
+| `racao/`       | RAÇÃO                |
+| `farmacia/`    | FARMÁCIA             |
+| `aves/`        | AVES                 |
+| `piscina/`     | PISCINA              |
+| `cutelaria/`   | CUTELARIA            |
+| `tabacaria/`   | TABACARIA            |
+| `ferramentas/` | FERRAMENTAS          |
+| `insumo/`      | INSUMO               |
+| `geral/`       | Outros departamentos |
 
 ### Extensões Suportadas
 
@@ -177,11 +209,20 @@ O sistema detecta automaticamente imagens em:
 ### Comandos de Imagem
 
 ```powershell
+# Analisar produtos sem imagem (NOVO!)
+python analyze_missing_products.py
+
 # Buscar imagens (modo barato)
 python scrape_all_images.py --cheap --workers 4
 
+# Buscar apenas produtos sem imagem
+python scrape_all_images.py --only-missing-images --cheap
+
 # Buscar imagens (modo premium com Vision AI)
 python scrape_all_images.py --stock-only
+
+# Reprocessar apenas falhas
+python scrape_all_images.py --only-failed --cheap
 
 # Organizar imagens existentes por categoria
 python scripts/organize_images.py
@@ -198,6 +239,36 @@ python upload_images.py
 
 ---
 
+## 📊 Análise de Cobertura
+
+O sistema inclui um analisador de cobertura de imagens:
+
+```powershell
+python analyze_missing_products.py
+```
+
+**Saída típica:**
+
+```
+📊 ESTATÍSTICAS GERAIS:
+  Total produtos no CSV: 4352
+  Imagens encontradas no disco: 2988
+  Cobertura atual: 68.7%
+
+📦 POR DEPARTAMENTO:
+  FERRAMENTAS: 11.5% cobertura (mais necessita atenção)
+  PESCA: 93.1% cobertura
+  PET: 94.4% cobertura
+
+🏷️ POR MARCA (Top com mais faltando):
+  TRAMONTINA: 30 faltando
+  MARINE SPORTS: 16 faltando
+```
+
+**Relatório gerado:** `data/missing_products_report.json`
+
+---
+
 ## 📤 Exportação WooCommerce
 
 ### Modos de Exportação
@@ -208,6 +279,9 @@ python main.py --input data/input/Athos.csv
 
 # LITE - Só preço e estoque (preserva SEO manual)
 python main.py --input data/input/Athos.csv --lite
+
+# LITE+IMAGES - Preço, estoque E imagens (preserva nome/descrição)
+python main.py --input data/input/Athos.csv --lite-images
 
 # TESTE - Só PET, PESCA, AQUARISMO (importação rápida)
 python main.py --input data/input/Athos.csv --teste
@@ -265,6 +339,7 @@ Comandos disponíveis:
 - `!status` - Status do sistema
 - `!sync` - Executar sincronização
 - `!scrape` - Buscar imagens
+- `!stats` - Estatísticas
 - `!help` - Ajuda
 
 ---
@@ -287,16 +362,19 @@ docker compose down
 
 ---
 
-## 📚 Documentação Adicional
+## 📚 Documentação
+
+Toda documentação está centralizada na pasta `docs/`:
 
 | Documento                                          | Descrição                       |
 | -------------------------------------------------- | ------------------------------- |
-| [COMANDOS.md](COMANDOS.md)                         | Referência completa de comandos |
-| [DEPLOY.md](DEPLOY.md)                             | Guia de deploy em produção      |
-| [contexto.md](contexto.md)                         | Contexto técnico detalhado      |
+| [docs/COMANDOS.md](docs/COMANDOS.md)               | Referência completa de comandos |
+| [docs/DEPLOY.md](docs/DEPLOY.md)                   | Guia de deploy em produção      |
+| [docs/contexto.md](docs/contexto.md)               | Contexto técnico detalhado      |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)       | Arquitetura do sistema          |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md)             | Histórico de versões            |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Resolução de problemas          |
+| [docs/CLEANUP_SUMMARY.md](docs/CLEANUP_SUMMARY.md) | Resumo da limpeza do projeto    |
 
 ---
 

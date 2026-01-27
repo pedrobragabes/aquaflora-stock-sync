@@ -1,7 +1,7 @@
 # 🔧 Troubleshooting - AquaFlora Stock Sync
 
 > **Guia de resolução de problemas comuns**  
-> Versão: 3.2 | Atualização: 22 Janeiro 2026
+> Versão: 3.3 | Atualização: 27 Janeiro 2026
 
 ---
 
@@ -16,6 +16,7 @@
 7. [CSV não Importa no WooCommerce](#-csv-não-importa-no-woocommerce)
 8. [Erros de Memória](#-erros-de-memória)
 9. [Problemas com Docker](#-problemas-com-docker)
+10. [Cobertura Baixa](#-cobertura-baixa)
 
 ---
 
@@ -89,8 +90,24 @@ Move-Item "7898242033022.jpg" "data/images/pet/"
 ```powershell
 # Deletar e rebuscar
 Remove-Item "data/images/pet/7898242033022.jpg"
-python scrape_all_images.py --sku 7898242033022
+python scrape_all_images.py --only-missing-images --cheap
 ```
+
+### Baixa cobertura em departamento
+
+**Sintoma:** Departamento com muitas imagens faltando.
+
+**Diagnóstico:**
+
+```powershell
+python analyze_missing_products.py
+```
+
+**Soluções:**
+
+1. Verificar se produtos têm marca detectada
+2. Considerar excluir departamento genérico
+3. Buscar imagens manualmente para produtos específicos
 
 ---
 
@@ -280,6 +297,24 @@ Get-Content data/vision_cache.json | ConvertFrom-Json
 python scrape_all_images.py --cheap
 ```
 
+### Timeout em produtos
+
+**Sintoma:**
+
+```
+⏰ TIMEOUT (>60s) - skipping SKU
+```
+
+**Causa:** Download lento ou servidor não responde.
+
+**Solução:**
+
+```powershell
+# Produtos com timeout vão para lista de falhas
+# Reprocessar depois com:
+python scrape_all_images.py --only-failed --cheap
+```
+
 ---
 
 ## 📊 CSV não Importa no WooCommerce
@@ -401,6 +436,56 @@ volumes:
 
 ---
 
+## 📉 Cobertura Baixa
+
+### Departamento com cobertura < 30%
+
+**Sintoma:** `analyze_missing_products.py` mostra departamento como FERRAMENTAS com 11.5%.
+
+**Diagnóstico:**
+
+```powershell
+python analyze_missing_products.py
+```
+
+**Soluções:**
+
+1. **Excluir departamento temporariamente:**
+
+```json
+// config/exclusion_list.json
+{
+  "exclude_departments": ["FERRAMENTAS"]
+}
+```
+
+2. **Melhorar queries de busca:**
+   - Verificar se produtos têm marca detectada
+   - Adicionar novas marcas em `config/brands.json`
+
+3. **Buscar manualmente:**
+   - Identificar produtos específicos no relatório
+   - Buscar imagens manualmente e salvar em pasta correta
+
+### Produtos falhando repetidamente
+
+**Sintoma:** Mesmos SKUs sempre falham no scraper.
+
+**Verificar:**
+
+```powershell
+# Ver relatório de falhas
+Get-Content data/missing_products_report.json | ConvertFrom-Json | Select-Object -ExpandProperty failed_products | Select-Object -First 20
+```
+
+**Soluções:**
+
+1. Verificar se são produtos genéricos (kits, combos)
+2. Adicionar à lista de exclusão
+3. Buscar imagens manualmente
+
+---
+
 ## 📞 Quando Pedir Ajuda
 
 Se nenhuma solução funcionou, forneça:
@@ -430,6 +515,12 @@ Get-Content .env | Select-String -NotMatch "KEY|SECRET|PASSWORD"
 Get-Content logs\*.log -Tail 50
 ```
 
+5. **Relatório de cobertura:**
+
+```powershell
+python analyze_missing_products.py
+```
+
 ---
 
 ## 🔄 Reset Completo
@@ -447,7 +538,10 @@ Remove-Item products.db -ErrorAction SilentlyContinue
 Remove-Item data\scraper_progress.json -ErrorAction SilentlyContinue
 Remove-Item data\vision_cache.json -ErrorAction SilentlyContinue
 Remove-Item data\search_cache.json -ErrorAction SilentlyContinue
+Remove-Item data\missing_products_report.json -ErrorAction SilentlyContinue
 Remove-Item logs\*.log -ErrorAction SilentlyContinue
+Remove-Item data\reports\*.json -ErrorAction SilentlyContinue
+Remove-Item data\reports\*.md -ErrorAction SilentlyContinue
 
 # 3. Reinstalar dependências
 Remove-Item -Recurse venv

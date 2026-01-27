@@ -5,6 +5,33 @@
 
 ---
 
+## [3.3.0] - 2026-01-27
+
+### ✨ Adicionado
+
+- **Análise de gaps:** Script `analyze_missing_products.py` para identificar produtos sem imagem
+- **Flag --only-missing-images:** Processa apenas SKUs sem imagem local
+- **Relatórios de sucesso:** Geração automática de relatórios por departamento/marca
+- **Métricas por categoria:** Tracking de sucesso/falha por departamento e marca
+- **Timeout por produto:** Evita travamentos em downloads lentos
+
+### 🔄 Alterado
+
+- **README.md:** Atualizado para v3.3 com métricas atuais (68.7% cobertura)
+- **COMANDOS.md:** Novos comandos de análise e --only-missing-images
+- **contexto.md:** Tabela de cobertura por departamento
+- **DEPLOY.md:** Workflow atualizado com análise de gaps
+- **.gitignore:** Novos arquivos de cache e relatórios
+
+### 📊 Métricas
+
+- Total produtos: 4.352
+- Imagens no disco: 2.988
+- Cobertura: 68.7%
+- Produtos faltando: 318
+
+---
+
 ## [3.2.0] - 2026-01-22
 
 ### ✨ Adicionado
@@ -14,6 +41,7 @@
 - **Multi-extensão:** Suporte a .jpg, .jpeg, .png, .webp, .avif, .gif
 - **Organização WooCommerce:** Script `organize_woocommerce_images.py`
 - **Documentação completa:** ARCHITECTURE.md, CHANGELOG.md, TROUBLESHOOTING.md
+- **Flag --lite-images:** Exporta preço, estoque e imagens (preserva SEO)
 
 ### 🔄 Alterado
 
@@ -123,12 +151,12 @@
 
 ## Roadmap
 
-### v3.3.0 (Planejado)
+### v3.4.0 (Planejado)
 
+- [ ] Melhorar cobertura FERRAMENTAS (atualmente 11.5%)
 - [ ] Automação 24h com cron/Task Scheduler
-- [ ] Dashboard com gráficos
-- [ ] Scraper incremental (só novos produtos)
-- [ ] Backup automático
+- [ ] Dashboard com gráficos de cobertura
+- [ ] Alertas de queda de cobertura
 
 ### v4.0.0 (Futuro)
 

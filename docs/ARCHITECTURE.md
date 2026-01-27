@@ -1,7 +1,7 @@
 # 🏗️ Arquitetura do Sistema - AquaFlora Stock Sync
 
 > **Documentação técnica da arquitetura**  
-> Versão: 3.2 | Atualização: 22 Janeiro 2026
+> Versão: 3.3 | Atualização: 27 Janeiro 2026
 
 ---
 
@@ -12,6 +12,7 @@ O AquaFlora Stock Sync é um sistema de ETL (Extract, Transform, Load) especiali
 1. **Extract:** Lê dados do ERP Athos (CSV)
 2. **Transform:** Enriquece com marca, peso, SEO, imagens
 3. **Load:** Gera CSV para importação no WooCommerce
+4. **Analyze:** Monitora cobertura de imagens e gaps
 
 ---
 
@@ -41,6 +42,13 @@ O AquaFlora Stock Sync é um sistema de ETL (Extract, Transform, Load) especiali
 │                        SAÍDA (Load)                             │
 ├─────────────────────────────────────────────────────────────────┤
 │  EnrichedProduct → CSV Export → WooCommerce Import             │
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      ANÁLISE (Monitor)                          │
+├─────────────────────────────────────────────────────────────────┤
+│  analyze_missing_products.py → Relatórios de gaps              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -156,6 +164,8 @@ CATEGORY_FOLDERS = {
     'PISCINA': 'piscina',
     'CUTELARIA': 'cutelaria',
     'TABACARIA': 'tabacaria',
+    'FERRAMENTAS': 'ferramentas',
+    'INSUMO': 'insumo',
 }
 ```
 
@@ -184,19 +194,50 @@ Query → Google Search → URLs → Download → Vision AI → Validação → 
 Query → DuckDuckGo → URLs (ou Bing fallback) → Download → Validar tamanho → Salvar
 ```
 
-**Query building para pesca:**
+**Features v3.3:**
+
+- `--only-missing-images`: processa apenas SKUs sem imagem local
+- Timeout por produto (60s) para evitar travamentos
+- Relatórios de sucesso por departamento/marca
+- Métricas de cobertura em tempo real
+
+---
+
+### 5. Analyze Missing Products (`analyze_missing_products.py`) - NOVO!
+
+**Responsabilidade:** Analisar gaps de cobertura de imagens.
+
+**Funcionalidades:**
 
 ```python
-def build_fishing_query(name: str, brand: str) -> str:
-    # Preserva códigos de modelo (CBB12, N11)
-    # Adiciona "produto pesca" para contexto
-    # Remove palavras genéricas
-    return f"{brand} {model_code} produto pesca"
+def analyze_missing():
+    # 1. Carrega produtos do CSV
+    # 2. Carrega progresso do scraper
+    # 3. Encontra imagens existentes no disco
+    # 4. Calcula cobertura por departamento
+    # 5. Calcula cobertura por marca
+    # 6. Identifica produtos que falharam
+    # 7. Gera recomendações de exclusão
+    # 8. Salva relatório JSON detalhado
+```
+
+**Saída:**
+
+```
+📊 ESTATÍSTICAS GERAIS:
+  Total produtos no CSV: 4352
+  Imagens encontradas no disco: 2988
+  Cobertura atual: 68.7%
+
+📦 POR DEPARTAMENTO:
+  FERRAMENTAS: 11.5% cobertura (108 faltando)
+  PESCA: 93.1% cobertura (85 faltando)
+  ...
 ```
 
 ---
 
-### 5. CSV Export (`main.py`)
+### 6. CSV Export (`main.py`)
 
 **Responsabilidade:** Gerar CSV compatível com WooCommerce.
 
@@ -227,6 +268,7 @@ CSV_FIELDS = [
 
 - **FULL:** Todos os campos
 - **LITE:** Só SKU, Stock, Regular price (preserva SEO manual)
+- **LITE-IMAGES:** SKU, Stock, Regular price, Images
 - **TESTE:** Só categorias PET, PESCA, AQUARISMO
 
 ---
@@ -236,23 +278,27 @@ CSV_FIELDS = [
 ```
 aquaflora-stock-sync/
 ├── main.py                      # Orquestrador principal
-├── scrape_all_images.py         # Scraper de imagens
+├── scrape_all_images.py         # Scraper de imagens v3
+├── analyze_missing_products.py  # Análise de gaps (NOVO)
 ├── upload_images.py             # Upload FTP
 ├── bot_control.py               # Bot Discord
 │
 ├── config/
 │   ├── settings.py              # Pydantic Settings (.env)
 │   ├── brands.json              # 160+ marcas
-│   └── exclusion_list.json      # Produtos excluídos
+│   ├── exclusion_list.json      # Produtos excluídos
+│   └── image_sources.json       # Regras de fontes
 │
 ├── src/
 │   ├── parser.py                # Parser CSV Athos
 │   ├── enricher.py              # Enriquecimento
 │   ├── image_scraper.py         # Core do scraper
+│   ├── image_curator.py         # Curadoria de imagens
 │   ├── database.py              # SQLite wrapper
 │   ├── sync.py                  # API WooCommerce
 │   ├── models.py                # Pydantic models
-│   ├── notifications.py         # Discord/Telegram
+│   ├── notifications.py         # Discord webhooks
+│   ├── backup.py                # Backup do banco
 │   └── exceptions.py            # Exceções custom
 │
 ├── dashboard/
@@ -264,14 +310,17 @@ aquaflora-stock-sync/
 │   ├── organize_images.py       # Organização scraper
 │   ├── consolidate_images.py    # Unificação
 │   ├── compare_images.py        # Comparação
-│   └── analyze_*.py             # Análises
+│   ├── analyze_*.py             # Análises
+│   └── upload_*.py              # Uploads
 │
 ├── data/
 │   ├── input/                   # CSVs do ERP
 │   ├── output/                  # CSVs gerados
+│   ├── reports/                 # Relatórios de sucesso
 │   └── images/                  # Imagens organizadas
 │       ├── pesca/
 │       ├── pet/
+│       ├── ferramentas/
 │       └── ...
 │
 └── logs/                        # Logs do sistema
@@ -306,6 +355,11 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 # Operação
 DRY_RUN=false
 SYNC_ENABLED=true
+
+# Scraper
+IMAGE_SEARCH_MODE=cheap
+SCRAPER_CHEAP_WORKERS=4
+SCRAPER_PREMIUM_WORKERS=1
 ```
 
 ### Configuração de Marcas (brands.json)
@@ -327,6 +381,10 @@ SYNC_ENABLED=true
 
 ```json
 {
+  "exclude_departments": ["FERRAMENTAS"],
+  "exclude_keywords": {
+    "generic": ["KIT", "COMBO", "PACOTE"]
+  },
   "patterns": ["FRETE", "DESCONTO", "CONSERTO", "VALE PRESENTE"],
   "skus": ["9999", "0000"]
 }
@@ -339,21 +397,27 @@ SYNC_ENABLED=true
 ### Execução Típica
 
 ```
-1. Carga do CSV (AthosParser)
-   └── 4.074 produtos parseados
+1. Análise de Gaps (analyze_missing_products.py)
+   └── Identificar 318 produtos sem imagem
 
-2. Enriquecimento (ProductEnricher)
+2. Scraping de Imagens (scrape_all_images.py --only-missing-images)
+   └── Buscar imagens para produtos faltantes
+
+3. Carga do CSV (AthosParser)
+   └── 4.352 produtos parseados
+
+4. Enriquecimento (ProductEnricher)
    ├── 160+ marcas detectadas
    ├── Peso extraído
    └── SEO gerado
 
-3. Busca de Imagens (Image Finder)
-   └── 3.101 imagens encontradas (76%)
+5. Busca de Imagens (Image Finder)
+   └── 2.988 imagens encontradas (68.7%)
 
-4. Exportação CSV
+6. Exportação CSV
    └── woocommerce_import_*.csv
 
-5. Notificação Discord
+7. Notificação Discord
    └── Relatório enviado
 ```
 
@@ -367,6 +431,11 @@ SYNC_ENABLED=true
                        ▼
                  ┌───────────┐
                  │  failed   │
+                 └───────────┘
+                       │
+                       ▼
+                 ┌───────────┐
+                 │  timeout  │ (novo em v3.3)
                  └───────────┘
 ```
 
@@ -382,15 +451,16 @@ SYNC_ENABLED=true
 | Enriquecimento          | ~5s         |
 | Busca de imagens        | ~30s        |
 | Export CSV              | ~1s         |
+| Análise de gaps         | ~3s         |
 
-### Cobertura
+### Cobertura (27/01/2026)
 
-| Métrica              | Valor |
-| -------------------- | ----- |
-| Produtos processados | 4.074 |
-| Com marca detectada  | ~85%  |
-| Com peso extraído    | ~70%  |
-| Com imagem           | 76%   |
+| Métrica              | Valor  |
+| -------------------- | ------ |
+| Produtos processados | 4.352  |
+| Com marca detectada  | ~85%   |
+| Com peso extraído    | ~70%   |
+| Com imagem           | 68.7%  |
 
 ---
 
@@ -401,11 +471,11 @@ SYNC_ENABLED=true
 ```python
 # logging_config.py
 LEVELS = {
-    'DEBUG': Detalhes técnicos,
-    'INFO': Operações normais,
-    'WARNING': Situações inesperadas,
-    'ERROR': Falhas recuperáveis,
-    'CRITICAL': Falhas fatais
+    'DEBUG': 'Detalhes técnicos',
+    'INFO': 'Operações normais',
+    'WARNING': 'Situações inesperadas',
+    'ERROR': 'Falhas recuperáveis',
+    'CRITICAL': 'Falhas fatais'
 }
 ```
 
@@ -420,6 +490,13 @@ LEVELS = {
 )
 def fetch_image(url: str) -> bytes:
     ...
+```
+
+### Timeout por Produto
+
+```python
+# scrape_all_images.py
+PRODUCT_TIMEOUT = 60  # Max seconds per product
 ```
 
 ---
@@ -437,9 +514,10 @@ def fetch_image(url: str) -> bytes:
 1. Editar `src/enricher.py`
 2. Adicionar mapeamento em `DEPARTMENT_CATEGORY_MAP`
 3. Criar pasta em `data/images/{nova_categoria}/`
+4. Atualizar `category_to_folder()` em `src/image_scraper.py`
 
 ### Adicionar Nova Fonte de Imagens
 
 1. Implementar interface em `src/image_scraper.py`
-2. Adicionar ao fluxo de busca
+2. Adicionar ao fluxo de busca em `search_with_fallback()`
 3. Testar com `scripts/test_image_scraper.py`

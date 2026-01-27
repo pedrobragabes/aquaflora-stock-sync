@@ -1,7 +1,7 @@
 # 📚 Guia de Comandos - AquaFlora Stock Sync v3.3
 
 > **Referência rápida de todos os comandos**  
-> Última atualização: 22 Janeiro 2026 | Nova flag: `--lite-images`
+> Última atualização: 27 Janeiro 2026
 
 ---
 
@@ -11,14 +11,43 @@
 # Setup inicial (Windows)
 $env:PYTHONIOENCODING="utf-8"
 
-# Fluxo completo de produção
-python scrape_all_images.py --cheap --stock-only --workers 4  # 1. Buscar imagens
-python upload_images.py                                        # 2. Upload FTP
-python main.py --input data/input/Athos.csv                    # 3. Gerar CSV
+# 🆕 Usando tasks.ps1 (recomendado)
+.\tasks.ps1 help          # Ver todos os comandos
+.\tasks.ps1 analyze       # Analisar gaps
+.\tasks.ps1 scrape        # Buscar 50 imagens
+.\tasks.ps1 sync          # Sync dry-run
+.\tasks.ps1 upload        # Upload dry-run
+
+# Fluxo completo de produção (manual)
+python scripts/analyze_missing_products.py                     # 0. Analisar gaps
+python scrape_all_images.py --cheap --stock-only --workers 4   # 1. Buscar imagens
+python upload_images.py                                         # 2. Upload FTP
+python main.py --input data/input/Athos.csv                     # 3. Gerar CSV
 
 # Dashboard
 uvicorn dashboard.app:app --reload --port 8000
 ```
+
+---
+
+## 📊 Análise de Cobertura
+
+```powershell
+# Usando tasks.ps1 (recomendado)
+.\tasks.ps1 analyze
+
+# Ou diretamente
+python scripts/analyze_missing_products.py
+```
+
+**Saída:**
+
+- Estatísticas gerais de cobertura
+- Faltantes por departamento
+- Faltantes por marca
+- Produtos que falharam no scraper
+- Sugestões de exclusão
+- Relatório JSON em `data/missing_products_report.json`
 
 ---
 
@@ -53,7 +82,7 @@ python scrape_all_images.py --reset
 # Reprocessar apenas falhas
 python scrape_all_images.py --only-failed
 
-# Processar apenas SKUs sem imagem local
+# Processar apenas SKUs sem imagem local (NOVO!)
 python scrape_all_images.py --only-missing-images
 
 # Forçar reprocessamento mesmo com imagem local
@@ -62,6 +91,7 @@ python scrape_all_images.py --no-skip-existing
 # Combinações úteis
 python scrape_all_images.py --cheap --stock-only --workers 4
 python scrape_all_images.py --only-failed --cheap --workers 2
+python scrape_all_images.py --only-missing-images --cheap --limit 100
 ```
 
 ### Opções Disponíveis
@@ -106,6 +136,8 @@ Get-Job | Remove-Job
 | `data/scraper_progress.json`        | Progresso (retomável)       |
 | `data/vision_cache.json`            | Cache Vision AI             |
 | `data/search_cache.json`            | Cache de busca por SKU      |
+| `data/reports/image_success_*.json` | Relatório de sucesso        |
+| `data/missing_products_report.json` | Análise de produtos         |
 
 ---
 
@@ -306,10 +338,13 @@ python scripts/test_image_scraper.py --sku 7898242033022
 ## 📈 Análises
 
 ```powershell
+# Analisar produtos sem imagem (NOVO! - mais completo)
+python analyze_missing_products.py
+
 # Analisar departamentos do ERP
 python scripts/analyze_departments.py
 
-# Analisar produtos sem imagem
+# Analisar produtos sem imagem (script antigo)
 python scripts/analyze_missing_images.py
 
 # Analisar departamento Geral Pesca
@@ -351,6 +386,10 @@ del data\scraper_progress.json
 
 # Limpar logs
 del logs\*.log
+
+# Limpar relatórios antigos
+del data\reports\*.json
+del data\reports\*.md
 ```
 
 ### Backup
@@ -371,20 +410,45 @@ $env:PYTHONIOENCODING="utf-8"
 # 2. Atualizar CSV do ERP
 # (copiar novo Athos.csv para data/input/)
 
-# 3. Buscar imagens novas (opcional)
-python scrape_all_images.py --cheap --stock-only --workers 4
+# 3. Analisar gaps de imagens (NOVO!)
+python analyze_missing_products.py
 
-# 4. Upload imagens para servidor (se houver novas)
+# 4. Buscar imagens novas
+python scrape_all_images.py --only-missing-images --cheap --workers 4
+
+# 5. Upload imagens para servidor (se houver novas)
 python upload_images.py
 
-# 5. Gerar CSV para WooCommerce
+# 6. Gerar CSV para WooCommerce
 python main.py --input data/input/Athos.csv
 
-# 6. Importar no WooCommerce
+# 7. Importar no WooCommerce
 # - Acessar WooCommerce → Produtos → Importar
 # - Selecionar arquivo de data/output/
 # - Mapear campos se necessário
 # - Executar importação
 
-# 7. Verificar notificações Discord
+# 8. Verificar notificações Discord
+```
+
+---
+
+## 🆘 Solução de Problemas
+
+Ver [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) para resolução de problemas comuns.
+
+### Problemas Frequentes
+
+```powershell
+# Encoding no Windows
+$env:PYTHONIOENCODING="utf-8"
+
+# Rate limit do DuckDuckGo - usar menos workers
+python scrape_all_images.py --cheap --workers 1
+
+# Quota Google - usar modo barato
+python scrape_all_images.py --cheap
+
+# Ver logs para diagnóstico
+Get-Content logs\scraper_full.log -Tail 50
 ```

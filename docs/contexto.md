@@ -1,7 +1,7 @@
-# 📋 Contexto Técnico - AquaFlora Stock Sync v3.2
+# 📋 Contexto Técnico - AquaFlora Stock Sync v3.3
 
 > **Documento de referência para desenvolvimento e manutenção**  
-> Última atualização: 22 Janeiro 2026
+> Última atualização: 27 Janeiro 2026
 
 ---
 
@@ -16,21 +16,35 @@
 5. Faz upload FTP para Hostinger
 6. Gera CSV para importação no WooCommerce
 7. Fornece dashboard web e bot Discord
+8. **Analisa gaps de cobertura de imagens** (novo em v3.3)
 
 ---
 
 ## 📊 Números do Projeto
 
-| Métrica               | Valor  |
-| --------------------- | ------ |
-| Produtos no ERP       | 4.074+ |
-| Departamentos         | 12     |
-| Marcas detectadas     | 160+   |
-| Semânticas Vision AI  | 80+    |
-| Imagens consolidadas  | 3.206  |
-| - WooCommerce (base)  | 1.967  |
-| - Scraper (novidades) | 1.239  |
-| Cobertura de imagens  | 76%    |
+| Métrica              | Valor |
+| -------------------- | ----- |
+| Produtos no ERP      | 4.352 |
+| Departamentos        | 12    |
+| Marcas detectadas    | 160+  |
+| Semânticas Vision AI | 80+   |
+| Imagens no disco     | 2.988 |
+| Cobertura de imagens | 68.7% |
+| Produtos sem imagem  | 318   |
+
+### Cobertura por Departamento (27/01/2026)
+
+| Departamento | Cobertura | Faltando |
+| ------------ | --------- | -------- |
+| FARMACIA     | 99.4%     | 3        |
+| AQUARISMO    | 99.6%     | 1        |
+| GERAL        | 97.2%     | 15       |
+| PET          | 94.4%     | 54       |
+| PESCA        | 93.1%     | 85       |
+| TABACARIA    | 90.9%     | 8        |
+| RACAO        | 84.5%     | 29       |
+| INSUMO       | 79.2%     | 15       |
+| FERRAMENTAS  | 11.5%     | 108      |
 
 ---
 
@@ -65,6 +79,12 @@
 │ (DuckDuckGo/    │     │ (validação)     │
 │  Bing/Google)   │     │                 │
 └─────────────────┘     └─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Analyze Missing │ ◀── analyze_missing_products.py
+│   (Reports)     │
+└─────────────────┘
 ```
 
 ---
@@ -79,6 +99,8 @@
 | `scrape_all_images.py` | Scraper de imagens v3                 |
 | `upload_images.py`     | Upload FTP para servidor              |
 | `bot_control.py`       | Bot Discord 2.0                       |
+| `tasks.ps1`            | Comandos PowerShell rápidos           |
+| `Makefile`             | Comandos Make                         |
 | `dashboard/app.py`     | FastAPI + HTMX                        |
 
 ### Módulos src/
@@ -90,8 +112,10 @@
 | `database.py`      | SQLite + histórico de preços  |
 | `sync.py`          | API WooCommerce + PriceGuard  |
 | `image_scraper.py` | Google Search + Vision AI     |
+| `image_curator.py` | Curadoria e validação         |
 | `models.py`        | Pydantic models + hashes      |
-| `notifications.py` | Discord/Telegram webhooks     |
+| `notifications.py` | Discord webhooks              |
+| `backup.py`        | Backup do banco de dados      |
 | `exceptions.py`    | Exceções customizadas         |
 
 ### Configurações config/
@@ -101,18 +125,20 @@
 | `settings.py`         | Pydantic Settings (carrega .env)    |
 | `brands.json`         | Lista de 160+ marcas                |
 | `exclusion_list.json` | Exclusões completas para e-commerce |
+| `image_sources.json`  | Regras de fontes de imagem          |
 
 ### Scripts Utilitários (scripts/)
 
-| Script                           | Função                                     |
-| -------------------------------- | ------------------------------------------ |
-| `organize_images.py`             | Organiza imagens do scraper por categoria  |
-| `organize_woocommerce_images.py` | Organiza imagens exportadas do WooCommerce |
-| `consolidate_images.py`          | Unifica imagens WC + scraper em uma pasta  |
-| `compare_images.py`              | Compara SKUs entre pastas de imagens       |
-| `analyze_departments.py`         | Analisa departamentos do ERP               |
-| `analyze_missing_images.py`      | Lista produtos sem imagem                  |
-| `test_image_scraper.py`          | Testa scraper em produtos específicos      |
+| Script                                | Função                                     |
+| ------------------------------------- | ------------------------------------------ |
+| `analyze_missing_products.py`         | Análise de gaps de imagens                 |
+| `delete_products_by_sku.py`           | Deletar produtos do WooCommerce            |
+| `remove_excluded_from_woocommerce.py` | Remove produtos excluídos do WC            |
+| `update_woo_image_urls.py`            | Atualiza URLs de imagens no WC             |
+| `upload_images_ftp.py`                | Upload FTP alternativo                     |
+| `upload_images_to_woocommerce.py`     | Upload direto para WooCommerce             |
+| `run_scraper_background.ps1`          | Script PowerShell para rodar em background |
+| `.old/`                               | Scripts obsoletos arquivados               |
 
 ---
 
@@ -167,7 +193,8 @@ RawProduct:
 **Categorias suportadas:**
 
 - pesca, pet, aquarismo, passaros, racao
-- farmacia, aves, piscina, cutelaria, tabacaria, geral
+- farmacia, aves, piscina, cutelaria, tabacaria
+- ferramentas, insumo, geral
 
 ### 4. Image Scraper (scrape_all_images.py)
 
@@ -176,20 +203,37 @@ RawProduct:
 - **Premium:** Google Custom Search + Vision AI (validação semântica)
 - **Cheap:** DuckDuckGo + Bing (fallback, sem validação AI)
 
-**Features:**
+**Features v3:**
 
 - Progresso salvo automaticamente (retomável)
 - Cache de buscas por SKU
 - Cache de Vision AI
 - Paralelismo configurável (--workers)
 - Organização automática por categoria
+- Flag `--only-missing-images` para processar apenas gaps
+- Relatórios de sucesso por departamento/marca
+- Timeout por produto para evitar travamentos
 
-### 5. CSV Export (main.py)
+### 5. Analyze Missing Products (analyze_missing_products.py) - NOVO!
+
+**Funcionalidade:** Análise completa de gaps de cobertura.
+
+**Saída:**
+
+- Estatísticas gerais
+- Cobertura por departamento
+- Cobertura por marca
+- Produtos que falharam no scraper
+- Recomendações de exclusão
+- Relatório JSON detalhado
+
+### 6. CSV Export (main.py)
 
 **Modos:**
 
 - **FULL:** Nome, descrição, imagens, preço, estoque, peso, marca
 - **LITE:** Só preço e estoque (preserva SEO manual)
+- **LITE-IMAGES:** Preço, estoque e imagens
 - **TESTE:** Só categorias PET, PESCA, AQUARISMO
 
 **Campos WooCommerce:**
@@ -218,6 +262,8 @@ data/images/
 ├── piscina/        # PISCINA
 ├── cutelaria/      # CUTELARIA
 ├── tabacaria/      # TABACARIA
+├── ferramentas/    # FERRAMENTAS
+├── insumo/         # INSUMO
 ├── geral/          # Outros
 └── sem_categoria/  # Fallback
 ```
@@ -229,12 +275,15 @@ Arquivos seguem padrão: `{SKU}.{extensão}`
 - SKU pode ser código interno ou EAN
 - Extensão detectada automaticamente
 
-### Consolidação
+### Arquivos de Cache e Progresso
 
-O script `scripts/consolidate_images.py` unifica:
-
-1. **Base:** Imagens do WooCommerce (exportação)
-2. **Novidades:** Imagens do scraper (apenas SKUs não existentes)
+| Arquivo                             | Descrição                     |
+| ----------------------------------- | ----------------------------- |
+| `data/scraper_progress.json`        | Progresso do scraper          |
+| `data/vision_cache.json`            | Cache Vision AI               |
+| `data/search_cache.json`            | Cache de buscas               |
+| `data/missing_products_report.json` | Análise de produtos           |
+| `data/reports/*.json`               | Relatórios de sucesso diários |
 
 ---
 
@@ -263,37 +312,46 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 # === Operação ===
 DRY_RUN=false
 SYNC_ENABLED=true
+
+# === Scraper ===
+IMAGE_SEARCH_MODE=cheap
+SCRAPER_CHEAP_WORKERS=4
+SCRAPER_PREMIUM_WORKERS=1
 ```
 
 ---
 
 ## 📈 Métricas de Qualidade
 
-### Cobertura de Imagens
+### Cobertura de Imagens (27/01/2026)
 
-- Total de produtos: 4.074
-- Com imagem: 3.101 (76%)
-- Sem imagem: 973 (24%)
+- Total de produtos: 4.352
+- Com imagem: 2.988 (68.7%)
+- Sem imagem: 318 (7.3%)
+- Em progresso/falha: ~1.046
 
-### Fontes de Imagens
+### Status do Scraper
 
-- WooCommerce (exportação): 1.967 (61%)
-- Scraper (novidades): 1.239 (39%)
+- Completados: 2.535
+- Falhados: 285
+- Excluídos: 157
+- Reutilizados: 2
 
 ### Extensões
 
-- WEBP: maioria das imagens WooCommerce
 - JPG: maioria das imagens scraper
+- WEBP: maioria das imagens WooCommerce
 - PNG, AVIF, GIF: algumas
 
 ---
 
 ## 🚀 Próximos Passos
 
-1. **Automatização 24h:** Cron job ou Windows Task Scheduler
-2. **Dashboard aprimorado:** Mais estatísticas, gráficos
-3. **Scraper incremental:** Só produtos novos/alterados
-4. **Backup automático:** Antes de cada sync
+1. **Melhorar FERRAMENTAS:** Cobertura atual de apenas 11.5%
+2. **Automatização 24h:** Cron job ou Windows Task Scheduler
+3. **Dashboard aprimorado:** Mais estatísticas, gráficos
+4. **Scraper incremental:** Só produtos novos/alterados
+5. **Backup automático:** Antes de cada sync
 
 ---
 
@@ -301,6 +359,7 @@ SYNC_ENABLED=true
 
 | Versão | Data       | Mudanças                                                           |
 | ------ | ---------- | ------------------------------------------------------------------ |
+| 3.3    | 27/01/2026 | Análise de gaps, --only-missing-images, relatórios de sucesso      |
 | 3.2    | 22/01/2026 | Consolidação de imagens, multi-extensão, organização por categoria |
 | 3.1    | 21/01/2026 | Modo cheap melhorado (DDGS API fix), queries de pesca              |
 | 3.0    | 19/01/2026 | Dashboard HTMX, scraper v3, Vision AI                              |

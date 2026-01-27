@@ -1,7 +1,7 @@
-# 🚀 Guia de Deploy - AquaFlora Stock Sync v3.2
+# 🚀 Guia de Deploy - AquaFlora Stock Sync v3.3
 
 > **Guia completo para deploy em produção**  
-> Última atualização: 22 Janeiro 2026
+> Última atualização: 27 Janeiro 2026
 
 ---
 
@@ -90,14 +90,34 @@ python main.py --input data/input/Athos.csv --dry-run
      - Programa: `powershell.exe`
      - Argumentos: `-ExecutionPolicy Bypass -File "C:\...\scripts\run_sync.ps1"`
 
-**Criar script `scripts/run_sync.ps1`:**
+**Usar o `tasks.ps1` já incluso ou criar script `scripts/run_sync.ps1`:**
 
 ```powershell
 $env:PYTHONIOENCODING="utf-8"
 cd "C:\Users\pedro\OneDrive\Documentos\aquaflora-stock-sync-main"
 .\venv\Scripts\Activate.ps1
+
+# Analisar cobertura
+python scripts/analyze_missing_products.py
+
+# Buscar imagens faltantes
+python scrape_all_images.py --only-missing-images --cheap --workers 4
+
+# Upload novas imagens
+python upload_images.py
+
+# Gerar CSV
 python main.py --input data/input/Athos.csv 2>&1 |
     Tee-Object -FilePath "logs\sync_$(Get-Date -Format yyyyMMdd).log"
+```
+
+**Ou simplesmente usar tasks.ps1:**
+
+```powershell
+.\tasks.ps1 analyze
+.\tasks.ps1 scrape-all
+.\tasks.ps1 upload-real
+.\tasks.ps1 sync-real
 ```
 
 ---
@@ -259,6 +279,7 @@ docker compose up -d
 
 # Executar comando
 docker compose exec app python main.py --dry-run
+docker compose exec app python analyze_missing_products.py
 
 # Shell no container
 docker compose exec app bash
@@ -335,7 +356,18 @@ curl http://localhost:8000/health
 
 # Verificar último sync
 cat last_run_stats.json
+
+# Verificar cobertura de imagens
+python analyze_missing_products.py
 ```
+
+### Relatórios Automáticos
+
+O scraper gera relatórios de sucesso em:
+
+- `data/reports/image_success_*.json` - Dados brutos
+- `data/reports/image_success_*.md` - Relatório legível
+- `data/missing_products_report.json` - Análise de gaps
 
 ---
 
@@ -400,6 +432,16 @@ netstat -an | findstr 8000
 kill -9 <PID>
 ```
 
+### Rate Limit do DuckDuckGo
+
+```powershell
+# Usar menos workers
+python scrape_all_images.py --cheap --workers 1
+
+# Ou usar modo premium (se tiver quota)
+python scrape_all_images.py --stock-only
+```
+
 ---
 
 ## 📋 Checklist de Deploy
@@ -415,3 +457,4 @@ kill -9 <PID>
 - [ ] Automação configurada (Task Scheduler / Cron / Systemd)
 - [ ] Dashboard acessível
 - [ ] Backup configurado
+- [ ] `analyze_missing_products.py` rodando para monitorar gaps

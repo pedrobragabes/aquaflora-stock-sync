@@ -1,5 +1,5 @@
 # ===========================================
-# AquaFlora Stock Sync v3.2 - .gitignore
+# AquaFlora Stock Sync v3.3 - .gitignore
 # ===========================================
 
 # Python
@@ -74,6 +74,7 @@ data/scraper_progress.json
 data/vision_cache.json
 data/search_cache.json
 data/upload_log.txt
+data/missing_products_report.json
 
 # Logs - ignore all except .gitkeep
 logs/*
@@ -91,6 +92,8 @@ data/input/*
 data/images/*
 !data/images/.gitkeep
 data/images_test/*
+
+# Reports - generated files
 data/reports/*
 !data/reports/.gitkeep
 
@@ -133,6 +136,7 @@ MANIFEST
 # AI/Agent artifacts
 .gemini/
 .copilot/
+.cursor/
 
 # Python linting/type checking
 .mypy_cache/
@@ -145,3 +149,8 @@ dmypy.json
 *.orig
 .hypothesis/
 
+# Testes
+scripts\.old
+# Ignorar pastas .old geradas durante a limpeza
+scripts/.old/
+data/.old/
