@@ -100,7 +100,11 @@ data/reports/*
 # Old/temporary image folders
 data/images woocommerce/
 data/images scraper/
+data/images scraper/
 data/Imagens antigas/
+Correção Imagem/
+*.html
+
 
 # CSV and MD data files
 data/*.csv
@@ -154,7 +158,4 @@ scripts\.old
 # Ignorar pastas .old geradas durante a limpeza
 scripts/.old/
 data/.old/
-
-# Correção Imagem - Ignore subfolders (images) but keep CSVs
-Correção Imagem/*/
-!Correção Imagem/*.csv
+Correção Imagem/
