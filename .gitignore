@@ -154,3 +154,7 @@ scripts\.old
 # Ignorar pastas .old geradas durante a limpeza
 scripts/.old/
 data/.old/
+
+# Correção Imagem - Ignore subfolders (images) but keep CSVs
+Correção Imagem/*/
+!Correção Imagem/*.csv

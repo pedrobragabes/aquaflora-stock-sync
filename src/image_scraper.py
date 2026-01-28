@@ -1486,6 +1486,16 @@ def search_images_bing(
             pattern = r'murl":"(https?://[^"]+)"'
             matches = re.findall(pattern, resp.text)
             
+            if not matches:
+                # Fallback regex for alternative Bing format
+                pattern2 = r'mediaurl":"(https?://[^"]+)"'
+                matches = re.findall(pattern2, resp.text)
+            
+            logger.debug(f"Bing matches found: {len(matches)} for query: {query}")
+
+
+
+            
             seen = set()
             for url in matches:
                 if url in seen:
