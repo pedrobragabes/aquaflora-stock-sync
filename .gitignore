@@ -1,5 +1,5 @@
 # ===========================================
-# AquaFlora Stock Sync v3.3 - .gitignore
+# AquaFlora Stock Sync v4.0 - .gitignore
 # ===========================================
 
 # Python
@@ -9,26 +9,15 @@ __pycache__/
 *.so
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 
 # Virtual Environment
 venv/
-ENV/
-env/
 .venv/
+env/
+ENV/
 
 # IDE
 .idea/
@@ -36,36 +25,23 @@ env/
 *.swp
 *.swo
 *~
-.project
-.pydevproject
-.settings/
 
 # OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 desktop.ini
 
 # ===========================================
-# Project Specific - AquaFlora Stock Sync
+# Project Specific
 # ===========================================
 
-# Environment & Secrets (NEVER commit!)
+# Environment & Secrets
 .env
 .env.*
 !.env.example
-*.pem
-*.key
-*credentials*
-*secret*
 
 # Database
 *.db
-products.db
 *.db-journal
 
 # Runtime State
@@ -76,86 +52,51 @@ data/search_cache.json
 data/upload_log.txt
 data/missing_products_report.json
 
-# Logs - ignore all except .gitkeep
+# Logs
 logs/*
 !logs/.gitkeep
 *.log
 
-# Data folders - user data, not code
+# Data folders
 data/output/*
 !data/output/.gitkeep
 
 data/input/*
 !data/input/.gitkeep
 
-# All image folders
 data/images/*
 !data/images/.gitkeep
-data/images_test/*
 
-# Reports - generated files
 data/reports/*
 !data/reports/.gitkeep
 
-# Old/temporary image folders
-data/images woocommerce/
-data/images scraper/
-data/images scraper/
-data/Imagens antigas/
+# Old/temp folders
 Correção Imagem/
-*.html
-
-
-# CSV and MD data files
-data/*.csv
-data/*.md
-
-# Node.js artifacts (from previous attempts)
-package-lock.json
-package.json
-node_modules/
+data/.old/
+scripts/.old/
 
 # Temporary files
 *.tmp
 *.temp
 *.bak
 *.backup
-*~
+*.orig
 
 # Test/Coverage
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/
-.nox/
 coverage.xml
-*.cover
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Distribution
-MANIFEST
+# Node.js
+node_modules/
+package-lock.json
 
 # AI/Agent artifacts
 .gemini/
 .copilot/
 .cursor/
 
-# Python linting/type checking
+# Linting/Type checking
 .mypy_cache/
 .ruff_cache/
-.pytype/
-.dmypy.json
-dmypy.json
-
-# Misc
-*.orig
-.hypothesis/
-
-# Testes
-scripts\.old
-# Ignorar pastas .old geradas durante a limpeza
-scripts/.old/
-data/.old/
-Correção Imagem/

@@ -4,13 +4,7 @@
   "default_allowlist": [],
   "category_rules": {
     "pet": {
-      "allowlist": [
-        "cobasi.com.br",
-        "petlove.com.br",
-        "petz.com.br",
-        "premierpet.com.br",
-        "royalcanin.com.br"
-      ],
+      "allowlist": [],
       "blocklist": []
     },
     "pesca": {

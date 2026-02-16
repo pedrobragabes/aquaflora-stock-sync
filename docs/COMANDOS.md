@@ -1,28 +1,23 @@
-# 📚 Guia de Comandos - AquaFlora Stock Sync v3.3
+# 📚 Guia de Comandos - AquaFlora Stock Sync v4.0
 
-> **Referência rápida de todos os comandos**  
-> Última atualização: 27 Janeiro 2026
+> **Referência rápida de todos os comandos**
+> Última atualização: 16 Fevereiro 2026
 
 ---
 
-## ⚡ Comandos Rápidos (Cheat Sheet)
+## ⚡ Comandos Rápidos
 
 ```powershell
-# Setup inicial (Windows)
 $env:PYTHONIOENCODING="utf-8"
 
-# 🆕 Usando tasks.ps1 (recomendado)
-.\tasks.ps1 help          # Ver todos os comandos
-.\tasks.ps1 analyze       # Analisar gaps
-.\tasks.ps1 scrape        # Buscar 50 imagens
-.\tasks.ps1 sync          # Sync dry-run
-.\tasks.ps1 upload        # Upload dry-run
+# Sync LITE (uso diário — só preço e estoque)
+python main.py --input data/input/Athos.csv --lite
 
-# Fluxo completo de produção (manual)
-python scripts/analyze_missing_products.py                     # 0. Analisar gaps
-python scrape_all_images.py --cheap --stock-only --workers 4   # 1. Buscar imagens
-python upload_images.py                                         # 2. Upload FTP
-python main.py --input data/input/Athos.csv                     # 3. Gerar CSV
+# Sync FULL (tudo)
+python main.py --input data/input/Athos.csv
+
+# Dry run (simula)
+python main.py --input data/input/Athos.csv --dry-run
 
 # Dashboard
 uvicorn dashboard.app:app --reload --port 8000
@@ -30,226 +25,93 @@ uvicorn dashboard.app:app --reload --port 8000
 
 ---
 
-## 📊 Análise de Cobertura
+## 📊 Exportação WooCommerce
 
 ```powershell
-# Usando tasks.ps1 (recomendado)
-.\tasks.ps1 analyze
+# FULL — nome, descrição, imagens, preço, estoque
+python main.py --input data/input/Athos.csv
 
-# Ou diretamente
-python scripts/analyze_missing_products.py
+# LITE — só preço e estoque (preserva SEO manual)
+python main.py --input data/input/Athos.csv --lite
+
+# LITE+IMAGES — preço, estoque e imagens
+python main.py --input data/input/Athos.csv --lite-images
+
+# TESTE — só PET, PESCA, AQUARISMO
+python main.py --input data/input/Athos.csv --teste
+
+# DRY RUN — simula sem gerar arquivo
+python main.py --input data/input/Athos.csv --dry-run
 ```
 
-**Saída:**
+| Flag | Descrição |
+|------|-----------|
+| `--input FILE` | Arquivo CSV do ERP |
+| `--lite` | Só preço/estoque |
+| `--lite-images` | Preço/estoque + imagens |
+| `--teste` | Só categorias principais |
+| `--dry-run` | Simula sem gerar |
+| `--watch` | Modo contínuo |
 
-- Estatísticas gerais de cobertura
-- Faltantes por departamento
-- Faltantes por marca
-- Produtos que falharam no scraper
-- Sugestões de exclusão
-- Relatório JSON em `data/missing_products_report.json`
+**Saída:** `data/output/woocommerce_*.csv`
 
 ---
 
 ## 🖼️ Image Scraper
 
-### Comandos Principais
-
 ```powershell
-# IMPORTANTE: Definir encoding UTF-8 no Windows
 $env:PYTHONIOENCODING="utf-8"
 
-# Scraper completo (prioriza estoque > 0)
-python scrape_all_images.py
+# Buscar imagens faltantes (uso recomendado)
+python scrape_all_images.py --only-missing-images --cheap --workers 4
 
-# Só produtos com estoque
-python scrape_all_images.py --stock-only
-
-# Modo barato (DuckDuckGo/Bing, sem Vision/Google)
-python scrape_all_images.py --cheap
-# ou
-python scrape_all_images.py --search-mode cheap
-
-# Paralelismo (mais rápido)
+# Modo barato (DuckDuckGo/Bing)
 python scrape_all_images.py --cheap --workers 4
 
-# Limitar quantidade (para testes)
-python scrape_all_images.py --limit 50
+# Só com estoque
+python scrape_all_images.py --stock-only --cheap
+
+# Limitar quantidade
+python scrape_all_images.py --limit 50 --cheap
+
+# Reprocessar falhas
+python scrape_all_images.py --only-failed --cheap
 
 # Recomeçar do zero
 python scrape_all_images.py --reset
-
-# Reprocessar apenas falhas
-python scrape_all_images.py --only-failed
-
-# Processar apenas SKUs sem imagem local (NOVO!)
-python scrape_all_images.py --only-missing-images
-
-# Forçar reprocessamento mesmo com imagem local
-python scrape_all_images.py --no-skip-existing
-
-# Combinações úteis
-python scrape_all_images.py --cheap --stock-only --workers 4
-python scrape_all_images.py --only-failed --cheap --workers 2
-python scrape_all_images.py --only-missing-images --cheap --limit 100
 ```
 
-### Opções Disponíveis
-
-| Flag                           | Descrição                             |
-| ------------------------------ | ------------------------------------- |
-| `--stock-only`                 | Só produtos com estoque > 0           |
-| `--limit N`                    | Limitar a N produtos                  |
-| `--reset`                      | Recomeçar do zero (limpa progresso)   |
-| `--search-mode premium\|cheap` | Define modo de busca                  |
-| `--cheap`                      | Atalho para `--search-mode cheap`     |
-| `--only-failed`                | Reprocessa apenas SKUs com falha      |
-| `--only-missing-images`        | Processa apenas SKUs sem imagem local |
-| `--skip-existing`              | Pula SKUs com imagem local (padrão)   |
-| `--no-skip-existing`           | Processa mesmo com imagem local       |
-| `--workers N`                  | Número de workers em paralelo         |
-
-### Rodar em Background (PowerShell)
-
-```powershell
-# Iniciar job em background
-Start-Job -ScriptBlock {
-    $env:PYTHONIOENCODING="utf-8"
-    cd "C:\Users\pedro\OneDrive\Documentos\aquaflora-stock-sync-main"
-    python scrape_all_images.py --cheap --stock-only --workers 4 2>&1 |
-        Tee-Object -FilePath logs\scraper.log
-}
-
-# Ver progresso
-Get-Job | Receive-Job -Keep
-
-# Parar
-Get-Job | Stop-Job
-Get-Job | Remove-Job
-```
-
-### Arquivos Gerados
-
-| Arquivo                             | Descrição                   |
-| ----------------------------------- | --------------------------- |
-| `data/images/{categoria}/{SKU}.jpg` | Imagens 800x800 organizadas |
-| `data/scraper_progress.json`        | Progresso (retomável)       |
-| `data/vision_cache.json`            | Cache Vision AI             |
-| `data/search_cache.json`            | Cache de busca por SKU      |
-| `data/reports/image_success_*.json` | Relatório de sucesso        |
-| `data/missing_products_report.json` | Análise de produtos         |
+| Flag | Descrição |
+|------|-----------|
+| `--stock-only` | Só com estoque > 0 |
+| `--limit N` | Limitar a N produtos |
+| `--reset` | Recomeçar (limpa progresso) |
+| `--cheap` | DuckDuckGo/Bing |
+| `--only-failed` | Só SKUs com falha |
+| `--only-missing-images` | Só SKUs sem imagem |
+| `--workers N` | Paralelismo |
 
 ---
 
 ## 📤 Upload de Imagens
 
-### Configuração FTP (.env)
-
-```env
-IMAGE_BASE_URL=https://sualoja.com.br/wp-content/uploads/produtos/
-IMAGE_FTP_HOST=sualoja.com.br
-IMAGE_FTP_USER=usuario
-IMAGE_FTP_PASSWORD=senha
-```
-
-### Comandos
-
 ```powershell
-# Ver o que seria enviado (dry-run)
+# Dry run
 python upload_images.py --dry-run
 
-# Enviar todas as imagens pendentes
+# Enviar pendentes
 python upload_images.py
 
-# Enviar imagem específica
-python upload_images.py --sku 7898242033022
-
-# Forçar reenvio de todas
+# Forçar reenvio
 python upload_images.py --force
 ```
 
 ---
 
-## 📊 Exportação WooCommerce
-
-### Comandos Principais
+## 📊 Análise de Cobertura
 
 ```powershell
-# FULL - Atualiza tudo (nome, descrição, imagens, preço, estoque)
-python main.py --input data/input/Athos.csv
-
-# LITE - Só preço e estoque (preserva SEO manual)
-python main.py --input data/input/Athos.csv --lite
-
-# LITE+IMAGES - Preço, estoque E imagens (preserva nome/descrição)
-python main.py --input data/input/Athos.csv --lite-images
-
-# TESTE - Só PET, PESCA, AQUARISMO (importação rápida)
-python main.py --input data/input/Athos.csv --teste
-
-# DRY RUN - Simula sem gerar arquivo
-python main.py --input data/input/Athos.csv --dry-run
-
-# Combinações
-python main.py --input data/input/Athos.csv --teste --dry-run
-python main.py --input data/input/Athos.csv --lite-images --teste
-```
-
-### Modos de Exportação
-
-| Modo            | Campos Atualizados                        | Uso                      |
-| --------------- | ----------------------------------------- | ------------------------ |
-| `--full`        | SKU, preço, estoque, nome, descrição, img | Primeira importação      |
-| `--lite`        | SKU, preço, estoque                       | Updates diários (rápido) |
-| `--lite-images` | SKU, preço, estoque, imagens              | Update com novas fotos   |
-
-### Opções
-
-| Flag            | Descrição                              |
-| --------------- | -------------------------------------- |
-| `--input FILE`  | Arquivo CSV do ERP                     |
-| `--lite`        | Modo leve (só preço/estoque)           |
-| `--lite-images` | Preço/estoque + imagens (preserva SEO) |
-| `--teste`       | Só categorias principais               |
-| `--dry-run`     | Simula sem gerar arquivo               |
-| `--watch`       | Modo contínuo (observa mudanças)       |
-
-### Saída
-
-```
-data/output/woocommerce_import_YYYYMMDD_HHMMSS.csv
-```
-
----
-
-## 🖼️ Organização de Imagens
-
-### Organizar Imagens do Scraper
-
-```powershell
-# Organiza data/images/ por categoria
-python scripts/organize_images.py
-```
-
-### Organizar Imagens do WooCommerce
-
-```powershell
-# Organiza imagens exportadas do WC
-python scripts/organize_woocommerce_images.py
-```
-
-### Consolidar Imagens
-
-```powershell
-# Unifica WooCommerce + Scraper em data/images/
-python scripts/consolidate_images.py
-```
-
-### Comparar Pastas
-
-```powershell
-# Compara SKUs entre pastas
-python scripts/compare_images.py
+python scripts/analyze_missing_products.py
 ```
 
 ---
@@ -257,13 +119,7 @@ python scripts/compare_images.py
 ## 🌐 Dashboard Web
 
 ```powershell
-# Iniciar em desenvolvimento
 uvicorn dashboard.app:app --reload --port 8000
-
-# Iniciar em produção
-uvicorn dashboard.app:app --host 0.0.0.0 --port 8000
-
-# Acessar
 # http://localhost:8000
 ```
 
@@ -272,44 +128,20 @@ uvicorn dashboard.app:app --host 0.0.0.0 --port 8000
 ## 🤖 Bot Discord
 
 ```powershell
-# Iniciar bot
 python bot_control.py
 ```
 
-### Comandos Discord
-
-| Comando   | Descrição              |
-| --------- | ---------------------- |
-| `!status` | Status do sistema      |
-| `!sync`   | Executar sincronização |
-| `!scrape` | Buscar imagens         |
-| `!stats`  | Estatísticas           |
-| `!help`   | Ajuda                  |
+Comandos: `!status`, `!sync`, `!scrape`, `!stats`, `!help`
 
 ---
 
 ## 🐳 Docker
 
 ```powershell
-# Build
 docker compose build
-
-# Iniciar serviços
 docker compose up -d
-
-# Ver logs
 docker compose logs -f
-
-# Ver logs de serviço específico
-docker compose logs -f app
-docker compose logs -f dashboard
-
-# Parar
 docker compose down
-
-# Rebuild forçado
-docker compose build --no-cache
-docker compose up -d
 ```
 
 ---
@@ -317,138 +149,46 @@ docker compose up -d
 ## 🔧 Testes
 
 ```powershell
-# Rodar todos os testes
 pytest
-
-# Testes com verbose
 pytest -v
-
-# Teste específico
 pytest tests/test_parser.py
-
-# Com cobertura
 pytest --cov=src
-
-# Testar scraper em produto específico
-python scripts/test_image_scraper.py --sku 7898242033022
-```
-
----
-
-## 📈 Análises
-
-```powershell
-# Analisar produtos sem imagem (NOVO! - mais completo)
-python analyze_missing_products.py
-
-# Analisar departamentos do ERP
-python scripts/analyze_departments.py
-
-# Analisar produtos sem imagem (script antigo)
-python scripts/analyze_missing_images.py
-
-# Analisar departamento Geral Pesca
-python scripts/analyze_geral_pesca.py
-```
-
----
-
-## 🗄️ Banco de Dados
-
-```powershell
-# Visualizar banco SQLite
-sqlite3 products.db ".tables"
-sqlite3 products.db "SELECT COUNT(*) FROM products"
-sqlite3 products.db "SELECT * FROM products LIMIT 5"
-
-# Backup
-copy products.db products_backup.db
-
-# Reset (cuidado!)
-del products.db
 ```
 
 ---
 
 ## 🔄 Manutenção
 
-### Limpar Cache
-
 ```powershell
-# Limpar cache de busca
+# Limpar caches
 del data\search_cache.json
-
-# Limpar cache Vision
 del data\vision_cache.json
-
-# Limpar progresso scraper
 del data\scraper_progress.json
-
-# Limpar logs
 del logs\*.log
 
-# Limpar relatórios antigos
-del data\reports\*.json
-del data\reports\*.md
-```
-
-### Backup
-
-```powershell
-# Backup completo
+# Backup
 Compress-Archive -Path data, products.db, .env -DestinationPath backup_$(Get-Date -Format yyyyMMdd).zip
 ```
 
 ---
 
-## 📋 Fluxo Completo de Produção
+## 📋 Fluxo Completo
 
 ```powershell
-# 1. Preparar ambiente
 $env:PYTHONIOENCODING="utf-8"
 
-# 2. Atualizar CSV do ERP
-# (copiar novo Athos.csv para data/input/)
+# 1. Copiar Athos.csv para data/input/
+# 2. Analisar gaps (opcional)
+python scripts/analyze_missing_products.py
 
-# 3. Analisar gaps de imagens (NOVO!)
-python analyze_missing_products.py
-
-# 4. Buscar imagens novas
+# 3. Buscar imagens novas (opcional)
 python scrape_all_images.py --only-missing-images --cheap --workers 4
 
-# 5. Upload imagens para servidor (se houver novas)
+# 4. Upload imagens (se houver novas)
 python upload_images.py
 
-# 6. Gerar CSV para WooCommerce
-python main.py --input data/input/Athos.csv
+# 5. Gerar CSV
+python main.py --input data/input/Athos.csv --lite
 
-# 7. Importar no WooCommerce
-# - Acessar WooCommerce → Produtos → Importar
-# - Selecionar arquivo de data/output/
-# - Mapear campos se necessário
-# - Executar importação
-
-# 8. Verificar notificações Discord
-```
-
----
-
-## 🆘 Solução de Problemas
-
-Ver [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) para resolução de problemas comuns.
-
-### Problemas Frequentes
-
-```powershell
-# Encoding no Windows
-$env:PYTHONIOENCODING="utf-8"
-
-# Rate limit do DuckDuckGo - usar menos workers
-python scrape_all_images.py --cheap --workers 1
-
-# Quota Google - usar modo barato
-python scrape_all_images.py --cheap
-
-# Ver logs para diagnóstico
-Get-Content logs\scraper_full.log -Tail 50
+# 6. Importar no WooCommerce
 ```

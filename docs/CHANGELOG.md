@@ -1,7 +1,35 @@
 # 📜 Changelog - AquaFlora Stock Sync
 
-> **Histórico de versões e mudanças**  
+> **Histórico de versões e mudanças**
 > Formato: [Semantic Versioning](https://semver.org/)
+
+---
+
+## [4.0.0] - 2026-02-16
+
+### 🧹 Limpeza Total
+
+- **Removido:** Pasta `Correção Imagem/` (CSVs antigos por categoria)
+- **Removido:** `scripts/.old/` (17 scripts obsoletos)
+- **Removido:** `data/.old/` (relatórios e dados antigos)
+- **Removido:** Pastas duplicadas `data/images scraper/` e `data/images woocommerce/`
+- **Removido:** `docs/CLEANUP_SUMMARY.md` (documento pontual)
+- **Removido:** Caches, logs antigos e artefatos runtime
+
+### 📚 Documentação
+
+- **Atualizado:** Todos os `.md` reescritos para v4.0
+- **README.md:** Simplificado, foco no sync LITE em produção
+- **contexto.md:** Reflete estado atual do projeto
+- **DEPLOY.md:** Foco em deploy no servidor
+- **ARCHITECTURE.md:** Sem referências a features/scripts deletados
+- **COMANDOS.md:** Só comandos dos scripts ativos
+- **.gitignore:** Limpo, sem duplicatas
+
+### ✅ Status
+
+- Sync de estoque funcionando em produção (modo LITE)
+- Projeto limpo e pronto para deploy em servidor
 
 ---
 
@@ -9,26 +37,15 @@
 
 ### ✨ Adicionado
 
-- **Análise de gaps:** Script `analyze_missing_products.py` para identificar produtos sem imagem
-- **Flag --only-missing-images:** Processa apenas SKUs sem imagem local
-- **Relatórios de sucesso:** Geração automática de relatórios por departamento/marca
-- **Métricas por categoria:** Tracking de sucesso/falha por departamento e marca
-- **Timeout por produto:** Evita travamentos em downloads lentos
+- **Análise de gaps:** Script `analyze_missing_products.py`
+- **Flag --only-missing-images:** Processa apenas SKUs sem imagem
+- **Relatórios de sucesso:** Geração automática por departamento/marca
+- **Timeout por produto:** Evita travamentos
 
 ### 🔄 Alterado
 
-- **README.md:** Atualizado para v3.3 com métricas atuais (68.7% cobertura)
-- **COMANDOS.md:** Novos comandos de análise e --only-missing-images
-- **contexto.md:** Tabela de cobertura por departamento
-- **DEPLOY.md:** Workflow atualizado com análise de gaps
-- **.gitignore:** Novos arquivos de cache e relatórios
-
-### 📊 Métricas
-
-- Total produtos: 4.352
-- Imagens no disco: 2.988
-- Cobertura: 68.7%
-- Produtos faltando: 318
+- Documentação atualizada para v3.3
+- .gitignore expandido
 
 ---
 
@@ -36,26 +53,10 @@
 
 ### ✨ Adicionado
 
-- **Consolidação de imagens:** Script `consolidate_images.py` unifica WooCommerce + Scraper
-- **Comparação de imagens:** Script `compare_images.py` analisa SKUs entre pastas
+- **Consolidação de imagens:** Unifica WooCommerce + Scraper
 - **Multi-extensão:** Suporte a .jpg, .jpeg, .png, .webp, .avif, .gif
-- **Organização WooCommerce:** Script `organize_woocommerce_images.py`
-- **Documentação completa:** ARCHITECTURE.md, CHANGELOG.md, TROUBLESHOOTING.md
-- **Flag --lite-images:** Exporta preço, estoque e imagens (preserva SEO)
-
-### 🔄 Alterado
-
-- **Image Finder:** Agora busca todas as extensões com ordem de prioridade
-- **README.md:** Atualizado para v3.2 com números atuais
-- **contexto.md:** Arquitetura e métricas atualizadas
-- **COMANDOS.md:** Novos comandos de organização
-- **DEPLOY.md:** Guia Windows melhorado
-- **.gitignore:** Organizado e expandido
-
-### 📊 Métricas
-
-- Imagens consolidadas: 3.206
-- Cobertura: 76% (3.101 de 4.074 produtos)
+- **Flag --lite-images:** Exporta preço, estoque e imagens
+- **Documentação:** ARCHITECTURE.md, CHANGELOG.md, TROUBLESHOOTING.md
 
 ---
 
@@ -64,18 +65,11 @@
 ### ✨ Adicionado
 
 - **Modo cheap melhorado:** DuckDuckGo com fallback Bing
-- **Queries de pesca:** Preservação de códigos de modelo (CBB12, N11)
-- **Cache de busca:** `data/search_cache.json` para evitar rebusca
+- **Cache de busca:** `data/search_cache.json`
 
 ### 🐛 Corrigido
 
-- **DDGS API:** Parâmetro `keywords=` → `query=` (breaking change da API)
-- **Format specifier:** Erro em `scrape_all_images.py`
-
-### 🔄 Alterado
-
-- **Bing fallback:** Múltiplas tentativas com queries variadas
-- **Logging:** Mais detalhes no modo cheap
+- **DDGS API:** `keywords=` → `query=`
 
 ---
 
@@ -87,16 +81,6 @@
 - **Scraper v3:** Arquitetura redesenhada
 - **Vision AI:** Validação semântica de imagens
 - **Bot Discord 2.0:** Comandos expandidos
-- **Organização por categoria:** Imagens em subpastas
-
-### 🔄 Alterado
-
-- **Estrutura de pastas:** `data/images/{categoria}/`
-- **Progresso retomável:** JSON com estado completo
-
-### 🗑️ Removido
-
-- Scraper v2 (código legado)
 
 ---
 
@@ -104,63 +88,27 @@
 
 ### ✨ Adicionado
 
-- **Bot Discord:** Controle remoto
-- **Notificações:** Discord e Telegram webhooks
-- **SQLite:** Histórico de preços
-- **PriceGuard:** Proteção contra variações bruscas
-
-### 🔄 Alterado
-
-- **Parser:** Suporte a formato "sujo" do ERP
-- **Enricher:** 160+ marcas
+- Bot Discord, notificações Discord/Telegram
+- SQLite com histórico de preços
+- PriceGuard
 
 ---
 
 ## [1.0.0] - 2026-01-10
 
-### ✨ Adicionado
+### ✨ Versão Inicial
 
-- **Parser CSV:** Leitura do ERP Athos
-- **Enricher:** Detecção de marca e peso
-- **Export CSV:** Formato WooCommerce
-- **Scraper básico:** Google Images
-
-### 📋 Funcionalidades iniciais
-
-- Leitura de CSV do ERP
-- Detecção de 50 marcas
-- Extração básica de peso
-- Geração de CSV para WooCommerce
+- Parser CSV, detecção de marcas, export WooCommerce, scraper básico
 
 ---
 
 ## Legenda
 
-| Emoji | Significado     |
-| ----- | --------------- |
-| ✨    | Novo recurso    |
-| 🔄    | Alteração       |
-| 🐛    | Correção de bug |
-| 🗑️    | Removido        |
-| 📊    | Métricas        |
-| 📋    | Documentação    |
-| ⚡    | Performance     |
-| 🔒    | Segurança       |
-
----
-
-## Roadmap
-
-### v3.4.0 (Planejado)
-
-- [ ] Melhorar cobertura FERRAMENTAS (atualmente 11.5%)
-- [ ] Automação 24h com cron/Task Scheduler
-- [ ] Dashboard com gráficos de cobertura
-- [ ] Alertas de queda de cobertura
-
-### v4.0.0 (Futuro)
-
-- [ ] Sync bidirecional WooCommerce ↔ ERP
-- [ ] Machine learning para categorização
-- [ ] API REST completa
-- [ ] Multi-loja
+| Emoji | Significado |
+|-------|------------|
+| ✨ | Novo recurso |
+| 🔄 | Alteração |
+| 🐛 | Correção |
+| 🗑️ | Removido |
+| 🧹 | Limpeza |
+| 📚 | Documentação |
