@@ -1,14 +1,27 @@
 """
 AquaFlora Stock Sync - Athos ERP Parser
 Parses the "dirty" CSV files exported from Athos ERP.
+
+Supports two input formats:
+  1. Clean CSV (preferred): semicolon-separated with header
+     "Codigo;CodigoBarras;Descricao;Unidade;Custo;Preco;Preco2;Estoque;
+      DepartamentoCod;Departamento;MarcaCod;Marca"
+  2. Legacy report (Crystal Reports CSV export): comma-separated with
+     repeated header garbage on every row, product data after the
+     "Valor Custo" marker.
+
+Crystal Reports binary `.rpt` files are NOT supported and will be rejected.
+The legacy CSV format may also contain SKUs corrupted by Excel's float64
+rounding (any code with more than 15 significant digits) — the parser
+emits warnings and the caller should prefer the clean format.
 """
 
 import logging
 import re
+from collections import Counter
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-import pandas as pd
 import ftfy
 
 from .models import RawProduct
@@ -16,20 +29,27 @@ from .exceptions import ParserError
 
 logger = logging.getLogger(__name__)
 
+# IEEE-754 double precision can represent integers exactly up to 2^53 (16 digits).
+# Any numeric SKU longer than this MAY have been rounded by spreadsheet tooling.
+FLOAT_SAFE_DIGITS = 15
+
+# Sentinel brand values from the ERP that aren't real brands.
+BRAND_PLACEHOLDERS = {"", "DIVERSAS", "SEM MARCA", "N/A", "-", "VARIAS"}
+
 
 class AthosParser:
     """
     Parses dirty Athos ERP export files.
-    
+
     The Athos ERP exports a report-style "CSV" that includes:
     - Company header information (garbage)
     - Column headers mixed with data
     - Product data after "Valor Custo" marker
     - Totals at the end (garbage)
-    
+
     This parser identifies the real data and extracts products.
     """
-    
+
     # Patterns to identify garbage lines
     GARBAGE_PATTERNS = [
         r"^Total\s*(Venda|Custo):",  # Total lines
@@ -39,39 +59,57 @@ class AthosParser:
         r"^Insc\.\s*Est\.:",
         r"^\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}$",  # CNPJ pattern
     ]
-    
+
     # Header marker - data comes after this column
     HEADER_MARKER = "Valor Custo"
-    
+
     # Department pattern
     DEPT_PATTERN = r"Departamento:\s*(.+)"
-    
+
     def __init__(self):
         self._garbage_regex = re.compile(
-            "|".join(self.GARBAGE_PATTERNS), 
+            "|".join(self.GARBAGE_PATTERNS),
             re.IGNORECASE
         )
         self._dept_regex = re.compile(self.DEPT_PATTERN, re.IGNORECASE)
     
     def parse_file(self, filepath: Path) -> List[RawProduct]:
         """
-        Parse an Athos ERP export file and return list of raw products.
-        
+        Parse an Athos ERP export file and return a list of raw products.
+
         Supports two formats:
-        1. Clean CSV (semicolon-separated): Modern export format
-        2. Dirty report format: Legacy format with "Valor Custo" markers
-        
+        1. Clean CSV (semicolon-separated, recommended): modern export
+        2. Dirty report format: legacy format with "Valor Custo" markers
+
+        Crystal Reports binary `.rpt` files are NOT supported — export
+        the same report as CSV from inside Crystal Reports first.
+
+        After parsing, the result is deduplicated by SKU (last row wins)
+        and a warning is logged if any duplicates or float-corrupted SKUs
+        were detected.
+
         Args:
-            filepath: Path to the CSV/text file
-            
+            filepath: Path to the CSV/text file.
+
         Returns:
-            List of RawProduct instances
-            
+            List of RawProduct instances (unique by SKU).
+
         Raises:
-            ParserError: If file cannot be read or parsed
+            ParserError: If the file cannot be read or parsed, or if a
+                Crystal Reports `.rpt` binary is given.
         """
         logger.info(f"📖 Parsing file: {filepath}")
-        
+
+        # Reject Crystal Reports binary up-front — it would otherwise
+        # decode to mojibake and silently produce zero products.
+        if filepath.suffix.lower() == ".rpt":
+            raise ParserError(
+                "Crystal Reports .rpt binary files are not supported. "
+                "Open the report in Crystal Reports and export it as CSV "
+                "(File → Export → CSV) before running the sync.",
+                filename=str(filepath),
+            )
+
         # Read file with encoding detection
         try:
             content = self._read_file(filepath)
@@ -79,92 +117,162 @@ class AthosParser:
             raise
         except Exception as e:
             raise ParserError(f"Failed to read file: {e}", filename=str(filepath))
-        
+
         # Detect format by checking first line
         first_line = content.split('\n')[0] if content else ""
-        
+
         if "Codigo;CodigoBarras;Descricao" in first_line or ";Descricao;" in first_line:
             # New clean CSV format with semicolon separator
             logger.info("📋 Detected clean CSV format (semicolon-separated)")
-            return self._parse_clean_csv(content, filepath)
+            products = self._parse_clean_csv(content, filepath)
         else:
             # Legacy dirty report format
             logger.info("📋 Detected legacy report format")
-            return self._parse_legacy_format(content, filepath)
+            logger.warning(
+                "⚠️  Legacy CSV format detected. SKUs longer than 15 digits "
+                "may have been corrupted by spreadsheet float64 rounding — "
+                "prefer the clean semicolon-separated export when available."
+            )
+            products = self._parse_legacy_format(content, filepath)
+
+        return self._dedupe_and_warn(products)
+
+    def _dedupe_and_warn(self, products: List[RawProduct]) -> List[RawProduct]:
+        """
+        Deduplicate by SKU (last write wins) and emit warnings.
+
+        - Logs a warning for every SKU that appears more than once,
+          showing the conflicting product names so the operator can
+          investigate the source file.
+        - Logs a warning for any SKU that exceeds the float64 precision
+          limit (>15 digits) — these are likely corrupted by Excel.
+        """
+        if not products:
+            return products
+
+        sku_counts = Counter(p.sku for p in products)
+        duplicates = {sku: cnt for sku, cnt in sku_counts.items() if cnt > 1}
+
+        if duplicates:
+            logger.warning(
+                f"⚠️  Found {len(duplicates)} duplicate SKU(s) "
+                f"({sum(duplicates.values()) - len(duplicates)} extra rows will be discarded). "
+                f"This usually means the source file was opened in Excel and long codes "
+                f"were rounded as floats."
+            )
+            for sku, _ in list(duplicates.items())[:5]:
+                names = [p.name for p in products if p.sku == sku]
+                logger.warning(f"    SKU {sku}: {names}")
+
+        suspect = [
+            p.sku for p in products
+            if p.sku.isdigit() and len(p.sku) > FLOAT_SAFE_DIGITS
+        ]
+        if suspect:
+            logger.warning(
+                f"⚠️  {len(suspect)} SKU(s) exceed {FLOAT_SAFE_DIGITS} digits and may "
+                f"have been corrupted by spreadsheet float rounding. Sample: {suspect[:3]}"
+            )
+
+        # Last write wins (matches dict behavior; preserves order via dict)
+        seen = {}
+        for p in products:
+            seen[p.sku] = p
+        return list(seen.values())
     
     def _parse_clean_csv(self, content: str, filepath: Path) -> List[RawProduct]:
-        """Parse the new clean CSV format with semicolon separator."""
+        """
+        Parse the clean CSV format with semicolon separator.
+
+        Column layout (0-indexed):
+            0  Codigo            Internal Athos code (zero-padded, e.g. 0000003603)
+            1  CodigoBarras      EAN/barcode when present, else short numeric code
+            2  Descricao         Product name
+            3  Unidade           Unit of measure (UNID, KG, ...)
+            4  Custo             Cost (Brazilian decimal: "1,18")
+            5  Preco             Sale price
+            6  Preco2            Secondary/wholesale price (often "0,00")
+            7  Estoque           Stock quantity
+            8  DepartamentoCod   Department numeric code
+            9  Departamento      Department name (used as category)
+           10  MarcaCod          Brand numeric code
+           11  Marca             Brand name (may be a placeholder like "DIVERSAS")
+
+        SKU rule: prefer CodigoBarras (col 1). When it's empty or non-numeric,
+        fall back to Codigo (col 0) with leading zeros stripped — this keeps
+        existing WooCommerce SKUs stable while still handling odd rows.
+        """
         products = []
         errors = []
-        
+
         lines = content.splitlines()
         if not lines:
             return []
-        
-        # Skip header row
+
         header = lines[0]
         logger.debug(f"CSV Header: {header}")
-        
+
+        # Sanity check: header should contain expected columns. Don't fail
+        # hard — just warn so the operator notices if Athos changes the
+        # export schema.
+        expected = {"codigo", "codigobarras", "descricao", "estoque", "preco"}
+        header_lower = header.lower().replace("﻿", "")
+        missing = [c for c in expected if c not in header_lower]
+        if missing:
+            logger.warning(
+                f"⚠️  Clean CSV header is missing expected columns {missing}. "
+                f"Got: {header[:120]}"
+            )
+
         for line_num, line in enumerate(lines[1:], 2):
             if not line.strip():
                 continue
-            
+
             try:
                 cols = line.split(';')
                 if len(cols) < 8:
                     continue
-                
-                # Column mapping for clean CSV:
-                # 0: Codigo (Internal code - NOT the SKU!)
-                # 1: CodigoBarras (EAN/Barcode - THIS is the SKU for WooCommerce)
-                # 2: Descricao (Name)
-                # 3: Unidade
-                # 4: Custo
-                # 5: Preco
-                # 6: Preco2
-                # 7: Estoque
-                # 8: DepartamentoCod
-                # 9: Departamento
-                # 10: MarcaCod
-                # 11: Marca
-                
-                codigo_interno = cols[0].strip()  # Internal Athos code
-                ean = cols[1].strip() if len(cols) > 1 else ""  # This is the real SKU!
+
+                codigo_interno = cols[0].strip()
+                ean = cols[1].strip() if len(cols) > 1 else ""
                 name = cols[2].strip() if len(cols) > 2 else ""
                 cost = cols[4].strip() if len(cols) > 4 else "0"
                 price = cols[5].strip() if len(cols) > 5 else "0"
                 stock = cols[7].strip() if len(cols) > 7 else "0"
                 department = cols[9].strip() if len(cols) > 9 else "SEM_CATEGORIA"
                 brand = cols[11].strip() if len(cols) > 11 else ""
-                
-                # SKU = CodigoBarras (EAN), not the internal Athos code!
-                sku = ean
-                
-                # Skip if no valid SKU (EAN)
+
+                # SKU: prefer EAN/CodigoBarras; fall back to Codigo (unpadded)
+                sku = ean if ean and any(c.isdigit() for c in ean) else codigo_interno.lstrip("0")
+
                 if not sku or not any(c.isdigit() for c in sku):
                     continue
-                
+
+                # Only carry EAN forward when it looks like a real barcode
+                # (8/12/13/14 digits — UPC/EAN/ITF lengths).
+                ean_clean = ean if ean.isdigit() and len(ean) in (8, 12, 13, 14) else None
+
                 product = RawProduct(
-                    sku=sku,  # EAN/Barcode
+                    sku=sku,
                     name=name,
                     stock=stock,
                     minimum="0",
                     price=price,
                     cost=cost,
                     department=department,
-                    ean=ean,  # Same as SKU for reference
+                    ean=ean_clean,
                     brand=brand,
                 )
                 products.append(product)
-                
+
             except Exception as e:
                 errors.append(f"Line {line_num}: {e}")
                 logger.debug(f"Line {line_num}: Parse error - {e}")
-        
+
         logger.info(f"✅ Parsed {len(products)} products from {filepath.name}")
         if errors:
             logger.warning(f"⚠️ {len(errors)} lines had parse errors")
-        
+
         return products
     
     def _parse_legacy_format(self, content: str, filepath: Path) -> List[RawProduct]:

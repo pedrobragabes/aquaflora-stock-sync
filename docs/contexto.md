@@ -1,7 +1,7 @@
-# 📋 Contexto Técnico - AquaFlora Stock Sync v4.0
+# 📋 Contexto Técnico - AquaFlora Stock Sync v4.1
 
 > **Documento de referência para desenvolvimento e manutenção**
-> Última atualização: 16 Fevereiro 2026
+> Última atualização: 27 Abril 2026
 
 ---
 
@@ -33,12 +33,19 @@
 ## 🏗️ Arquitetura
 
 ```
-ERP Athos (CSV) → AthosParser → ProductEnricher → CSV Export → WooCommerce
-                                       ↑
-                              Image Finder (local)
-                                       ↑
-                          Image Scraper (DuckDuckGo/Google)
+ERP Athos (CSV) → AthosParser → dedupe + warn → ProductEnricher → CSV Export → WooCommerce
+                       ↑                              ↑                ↑
+              .rpt rejeitado                Image Finder (local)   GTIN preservado
+              SKUs >15 dígitos →                   ↑              quando válido
+              warning de corrupção        Image Scraper (DuckDuckGo/Google)
 ```
+
+### Decisões importantes
+
+- **Sempre prefira `Athos.csv` (CSV limpo `;`)** ao `Relatório Completo Athos.csv`. O segundo passa pelo Crystal Reports e perde precisão em SKUs com mais de 15 dígitos (limite do float64). O parser detecta e avisa, mas não consegue recuperar valores já corrompidos.
+- **Arquivos `.rpt` (binário do Crystal Reports) são rejeitados** com mensagem clara — exporte como CSV antes.
+- **Deduplicação por SKU**: quando duas linhas têm o mesmo SKU, a última vence e um warning é emitido.
+- **Preservação de EAN/GTIN**: códigos `CodigoBarras` de 8/12/13/14 dígitos são marcados como EAN válidos e exportados na coluna `GTIN, UPC, EAN, ou ISBN` do CSV WooCommerce. Códigos curtos (internos do Athos) só vão na coluna `SKU`.
 
 ### Módulos Principais
 
@@ -132,6 +139,7 @@ Imagens em `data/images/{categoria}/{SKU}.{ext}`:
 
 | Versão | Data | Mudanças |
 |--------|------|----------|
+| 4.1 | 27/04/2026 | Parser endurecido: rejeita `.rpt`, deduplica SKUs, alerta corrupção float64, GTIN exportado |
 | 4.0 | 16/02/2026 | Limpeza total, sync funcionando, pronto para servidor |
 | 3.3 | 27/01/2026 | Análise de gaps, --only-missing-images |
 | 3.2 | 22/01/2026 | Consolidação de imagens, multi-extensão |

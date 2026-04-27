@@ -1,7 +1,49 @@
-# 🔧 Troubleshooting - AquaFlora Stock Sync v4.0
+# 🔧 Troubleshooting - AquaFlora Stock Sync v4.1
 
 > **Guia de resolução de problemas comuns**
-> Última atualização: 16 Fevereiro 2026
+> Última atualização: 27 Abril 2026
+
+---
+
+## 📥 Arquivo de Entrada — Qual usar?
+
+A pasta `AthosEstoque/` (ou `data/input/`) costuma ter três arquivos:
+
+| Arquivo | Recomendação |
+|---------|--------------|
+| `Athos.csv` | ✅ **Use este.** CSV limpo `;` com EAN, marca e categoria. |
+| `Relatório Completo Athos.csv` | ⚠️ Use só se não tiver o limpo. SKUs longos podem ser corrompidos. |
+| `Athos.rpt` | ❌ **Não suportado.** É binário do Crystal Reports — abra-o no Crystal e exporte como CSV. |
+
+```powershell
+# Correto
+python main.py --input data/input/Athos.csv --lite
+
+# Errado (vai falhar com mensagem clara)
+python main.py --input data/input/Athos.rpt --lite
+```
+
+---
+
+## 🔢 SKUs de mais de 15 dígitos são corrompidos
+
+**Sintoma:** três produtos diferentes aparecem com o mesmo SKU no `data/output/woocommerce_*.csv`.
+
+```
+WARNING | ⚠️  Found 2 duplicate SKU(s) (5 extra rows will be discarded).
+WARNING |     SKU 42127836542536000: ['FORTMAX 12MG', 'FORTMAX 3MG', 'FORTMAX 6MG']
+```
+
+**Causa:** o "Relatório Completo" passa pelo Crystal Reports/Excel, que armazena
+SKUs como `float64` (precisão de ~15 dígitos significativos). Códigos como
+`42127836542535989`, `...990`, `...991` são todos arredondados para
+`42127836542536000`.
+
+**Solução:**
+
+1. Use `Athos.csv` (formato limpo) — SKUs preservados como string.
+2. Se precisar do relatório longo, exporte do Crystal **direto para CSV** sem
+   abrir no Excel. O parser ainda emite o aviso, mas as linhas únicas sobrevivem.
 
 ---
 

@@ -742,11 +742,14 @@ def export_to_csv_full(products, output_dir: Path) -> Path:
             # Preço no formato brasileiro (vírgula)
             preco_br = f"{p.price:.2f}".replace('.', ',')
             
+            # GTIN: only fill when EAN is a valid barcode (8/12/13/14 digits).
+            gtin = p.ean if p.ean else (p.sku if p.sku.isdigit() and len(p.sku) in (8, 12, 13, 14) else '')
+
             row = [
                 '',  # ID - vazio para update por SKU
                 'simple',  # Tipo
                 p.sku,  # SKU
-                '',  # GTIN
+                gtin,  # GTIN/EAN/UPC/ISBN
                 p.name,  # Nome
                 1 if p.stock > 0 else 0,  # Publicado
                 0,  # Em destaque?

@@ -290,14 +290,19 @@ class ProductEnricher:
             formatted_name, category, brand, weight_total, weight_unit, weight_qty
         )
         
+        # Round stock toward nearest integer (KG products like "15,338" lose
+        # the fractional kg here — WooCommerce manages stock as integers).
+        stock_int = int(round(raw.stock))
+
         return EnrichedProduct(
             sku=raw.sku,
+            ean=raw.ean,
             name=formatted_name,
             name_original=raw.name,
-            stock=int(raw.stock),
+            stock=stock_int,
             price=Decimal(str(round(raw.price, 2))),
             cost=Decimal(str(round(raw.cost, 2))),
-            minimum=int(raw.minimum),
+            minimum=int(round(raw.minimum)),
             category=category,
             category_original=raw.department,
             brand=brand,

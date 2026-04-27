@@ -98,13 +98,14 @@ class RawProduct(BaseModel):
 class EnrichedProduct(BaseModel):
     """Product after enrichment with brand, weight, SEO content."""
     sku: str
+    ean: Optional[str] = None  # GTIN/EAN/UPC barcode (8/12/13/14 digits)
     name: str
     name_original: str
     stock: int
     price: Decimal
     cost: Decimal
     minimum: int
-    
+
     category: str
     category_original: str
     brand: Optional[str] = None
