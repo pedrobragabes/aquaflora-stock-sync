@@ -1,4 +1,4 @@
-# 🐠 AquaFlora Stock Sync v4.0
+# 🐠 AquaFlora Stock Sync v4.1
 
 **Sincronização automática de estoque e preços** — ERP Athos → WooCommerce via CSV.
 
@@ -13,17 +13,36 @@
 
 O sync de estoque **está funcionando em produção**. O CSV do ERP Athos é processado e gera um CSV para importação no WooCommerce, atualizando preços e estoque automaticamente.
 
+> ⚠️ **Sempre prefira o `Athos.csv` (formato limpo, separador `;`)** ao
+> "Relatório Completo" exportado do Crystal Reports. O CSV do relatório
+> longo passa pelo Excel/Crystal e perde precisão em SKUs com mais de 15
+> dígitos (float64), gerando colisões silenciosas. Veja
+> [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#-skus-de-mais-de-15-dígitos-são-corrompidos).
+
 ---
 
 ## 🎯 O que este projeto faz
 
 1. **Lê CSV do ERP Athos** → Parser que limpa dados "sujos" do relatório
-2. **Enriquece produtos** → Detecta marca (160+), peso, gera SEO
+2. **Enriquece produtos** → Detecta marca (160+), peso, gera SEO, preserva EAN/GTIN
 3. **Busca imagens** → Modo premium (Google + Vision AI) ou barato (DuckDuckGo/Bing)
 4. **Upload FTP** → Envia imagens para o servidor Hostinger
 5. **Exporta CSV WooCommerce** → Modo FULL ou LITE (só preço/estoque)
 6. **Dashboard Web** → Controle visual com FastAPI + HTMX
 7. **Bot Discord** → Comandos remotos e notificações
+
+### 📥 Formatos de entrada suportados
+
+| Arquivo | Formato | Suporte | Observação |
+|---------|---------|---------|------------|
+| `Athos.csv` | CSV `;` com header `Codigo;CodigoBarras;...` | ✅ **Recomendado** | Preserva todos os SKUs, marca e EAN |
+| `Relatório Completo Athos.csv` | CSV `,` (export do Crystal Reports) | ⚠️ Funciona com aviso | SKUs longos podem ser corrompidos pelo float64 |
+| `Athos.rpt` | Crystal Reports binário | ❌ Rejeitado | Exporte como CSV antes de usar |
+
+O parser detecta automaticamente o formato e:
+- **Valida SKUs**: avisa quando códigos têm mais de 15 dígitos (limite do float64).
+- **Deduplica**: avisa e descarta linhas com SKU repetido (last write wins).
+- **Preserva EAN**: códigos de 8/12/13/14 dígitos vão para a coluna GTIN do WooCommerce.
 
 ---
 

@@ -1,7 +1,7 @@
-# 🏗️ Arquitetura do Sistema - AquaFlora Stock Sync v4.0
+# 🏗️ Arquitetura do Sistema - AquaFlora Stock Sync v4.1
 
 > **Documentação técnica da arquitetura**
-> Última atualização: 16 Fevereiro 2026
+> Última atualização: 27 Abril 2026
 
 ---
 
@@ -46,11 +46,23 @@ Sistema ETL (Extract, Transform, Load) para e-commerce:
 
 ### 1. AthosParser (`src/parser.py`)
 
-Lê e normaliza CSV "sujo" do ERP:
-- Detecta formato (limpo vs sujo)
-- Remove linhas de garbage (headers, paginação, totais)
-- Extrai departamento de linhas "Departamento: XXX"
-- Normaliza encoding (UTF-8 + ftfy)
+Lê e normaliza CSV do ERP:
+
+**Formatos suportados:**
+| Formato | Detecção | Suporte |
+|---------|----------|---------|
+| CSV limpo `;` | Header começa com `Codigo;CodigoBarras;Descricao` | ✅ Recomendado |
+| Crystal Reports CSV `,` | Sem header reconhecido, dados após marca `Valor Custo` | ⚠️ Funciona com aviso |
+| Crystal Reports `.rpt` | Extensão `.rpt` | ❌ Rejeita com `ParserError` claro |
+
+**Garantias:**
+- Remove linhas de garbage (headers, paginação, totais).
+- Extrai departamento de linhas "Departamento: XXX" (formato legado).
+- Normaliza encoding (UTF-8 + ftfy).
+- **Deduplica por SKU** (last write wins) — evita que linhas com SKU repetido sobrescrevam silenciosamente outros produtos.
+- **Avisa sobre SKUs corrompidos** — códigos com mais de 15 dígitos podem ter sido arredondados pelo float64 do Excel/Crystal.
+- **EAN sanity check** — só preserva `ean` quando o `CodigoBarras` tem 8/12/13/14 dígitos (UPC/EAN/ITF padrão).
+- **Fallback de SKU** — quando `CodigoBarras` está vazio, usa `Codigo` (col 0) sem zeros à esquerda.
 
 **Saída:** `RawProduct` (sku, name, stock, price, cost, department, ean, brand)
 
@@ -81,7 +93,9 @@ Features: progresso retomável, cache de buscas, paralelismo, `--only-missing-im
 
 ### 5. CSV Export (`main.py`)
 
-Campos: SKU, Name, Description, Short description, Regular price, Stock, Categories, Images, Weight (kg), Brands, Tax status, In stock?, Published, Visibility.
+Campos: SKU, GTIN/EAN, Name, Description, Short description, Regular price, Stock, Categories, Images, Weight (kg), Brands, Tax status, In stock?, Published, Visibility.
+
+**Coluna GTIN:** preenchida quando o produto tem EAN válido (8/12/13/14 dígitos). Útil para o WooCommerce mapear barras de loja física e Google Shopping.
 
 Modos: FULL | LITE | LITE-IMAGES | TESTE
 

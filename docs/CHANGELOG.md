@@ -5,6 +5,30 @@
 
 ---
 
+## [4.1.0] - 2026-04-27
+
+### 🐛 Corrigido
+
+- **Parser deduplicação por SKU:** linhas com SKU repetido eram silenciosamente sobrescritas no CSV de saída. Agora a última linha vence e um warning lista os nomes em conflito.
+- **Corrupção de SKU pelo float64:** `Relatório Completo Athos.csv` (export do Crystal Reports) tinha SKUs com mais de 15 dígitos arredondados para `...0000`, fazendo 3+ produtos diferentes virarem um só. O parser agora detecta e avisa.
+- **Coluna GTIN vazia:** mesmo quando o produto tinha EAN-13 válido, a coluna `GTIN, UPC, EAN, ou ISBN` saía vazia. Agora vai populada para códigos de 8/12/13/14 dígitos.
+- **Stock fracionário arredondado:** produtos vendidos por KG (ex.: `15,338`) agora usam `round()` ao invés de `int()` (truncamento), preservando o gramo a mais.
+
+### ✨ Adicionado
+
+- **Rejeição de `.rpt`:** arquivos binários do Crystal Reports são rejeitados com `ParserError` claro orientando exportar como CSV antes.
+- **Sanity check de header:** se o Athos mudar o schema do export, o parser avisa quais colunas esperadas faltam.
+- **Fallback de SKU:** quando `CodigoBarras` está vazio na linha do CSV, usa `Codigo` (col 0) sem zeros à esquerda.
+- **Validação de EAN:** só aceita `8/12/13/14` dígitos como EAN — códigos longos do Athos vão como SKU mas não viram GTIN inválido.
+- **Testes:** 6 novos testes cobrindo dedup, rejeição de `.rpt`, fallback de SKU, EAN sanity, decimais brasileiros e detecção de corrupção float64.
+
+### 🧹 Limpeza
+
+- Removido import não-usado `pandas` do parser (continua em `requirements.txt` para outros scripts).
+- Removido import não-usado `Tuple` do parser.
+
+---
+
 ## [4.0.0] - 2026-02-16
 
 ### 🧹 Limpeza Total
