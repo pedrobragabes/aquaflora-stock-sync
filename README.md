@@ -92,9 +92,14 @@ python main.py --input data/input/Athos.csv --lite
 # Sync FULL — tudo (nome, descrição, imagens, preço, estoque)
 python main.py --input data/input/Athos.csv
 
-# Dry run — simula sem gerar arquivo
+# Dry run — simula sync e gera planilhas de revisão por grupo
 python main.py --input data/input/Athos.csv --dry-run
 ```
+
+No `--dry-run`, alem do CSV WooCommerce normal, o sistema cria uma pasta
+`data/output/dry_run_refine_YYYYMMDD_HHMMSS/` com arquivos como
+`01_pesca.csv`, `02_pet_racoes.csv`, `12_revisar_sem_categoria.csv`,
+`00_grupos_sugeridos.csv`, `imagens.md` e `refine_summary.json`.
 
 ---
 

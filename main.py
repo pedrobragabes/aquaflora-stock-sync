@@ -18,8 +18,9 @@ import sys
 import io
 import os
 
-# Fix Windows console encoding for emojis
-if sys.platform == 'win32':
+# Fix Windows console encoding for emojis. Skip under pytest because replacing
+# captured stdout/stderr during module import breaks pytest's capture files.
+if sys.platform == 'win32' and "pytest" not in sys.modules:
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
     os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -114,8 +115,9 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
     if not allow_create:
         logger.info("🛡️  Safety: New products will NOT be created (use --allow-create to enable)")
     
+    effective_dry_run = dry_run or settings.dry_run
     logger.info(f"Input: {input_file}")
-    logger.info(f"Dry Run: {dry_run}")
+    logger.info(f"Dry Run: {effective_dry_run}")
     logger.info(f"{'='*60}")
     
     # 1. Parse input file
@@ -202,7 +204,7 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
             woo_url=settings.woo_url,
             consumer_key=settings.woo_consumer_key,
             consumer_secret=settings.woo_consumer_secret,
-            dry_run=dry_run or settings.dry_run,
+            dry_run=effective_dry_run,
             price_guard_max_variation=settings.price_guard_max_variation,
             lite_mode=lite_mode,
             allow_create=allow_create,
@@ -231,6 +233,14 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
     else:
         output_file = export_to_csv_full(enriched_products, settings.output_dir)
     logger.info(f"✅ Exported to: {output_file}")
+
+    if effective_dry_run:
+        review_dir = export_dry_run_review_files(
+            enriched_products,
+            settings.output_dir,
+            input_file=input_file,
+        )
+        logger.info(f"🧹 Dry-run review files: {review_dir}")
     
     # 6. Send notifications
     if settings.discord_webhook_configured:
@@ -469,6 +479,449 @@ def generate_weight_outlier_report(products, config: dict) -> Optional[Path]:
     return json_path
 
 
+REVIEW_GROUPS = [
+    {
+        "key": "01_pesca",
+        "filename": "01_pesca.csv",
+        "label": "Pesca",
+        "note": "Itens de pesca para revisar nome, marca, preco e categoria.",
+    },
+    {
+        "key": "02_pet_racoes",
+        "filename": "02_pet_racoes.csv",
+        "label": "Pet racoes",
+        "note": "Racoes, alimentos e petiscos.",
+    },
+    {
+        "key": "03_pet_brinquedos",
+        "filename": "03_pet_brinquedos.csv",
+        "label": "Pet brinquedos",
+        "note": "Brinquedos, mordedores, bolinhas e arranhadores.",
+    },
+    {
+        "key": "04_pet_acessorios",
+        "filename": "04_pet_acessorios.csv",
+        "label": "Pet acessorios",
+        "note": "Acessorios pet que nao cairam em racao, higiene, roupas ou brinquedos.",
+    },
+    {
+        "key": "05_pet_higiene",
+        "filename": "05_pet_higiene.csv",
+        "label": "Pet higiene",
+        "note": "Higiene, limpeza, banho, tapetes e areia sanitaria.",
+    },
+    {
+        "key": "06_pet_roupas_cosmeticos",
+        "filename": "06_pet_roupas_cosmeticos.csv",
+        "label": "Pet roupas e cosmeticos",
+        "note": "Roupas, lacinhos, perfumes e cosmeticos pet.",
+    },
+    {
+        "key": "07_aquarismo",
+        "filename": "07_aquarismo.csv",
+        "label": "Aquarismo",
+        "note": "Produtos de aquarismo.",
+    },
+    {
+        "key": "11_medicamentos",
+        "filename": "11_medicamentos.csv",
+        "label": "Medicamentos",
+        "note": "Farmacia, veterinaria, antipulgas, vermifugos e similares.",
+    },
+    {
+        "key": "12_revisar_sem_categoria",
+        "filename": "12_revisar_sem_categoria.csv",
+        "label": "Revisar sem categoria",
+        "note": "Itens do Athos em Geral/Sem categoria para triagem manual.",
+    },
+    {
+        "key": "99_adicionar_manual",
+        "filename": "99_adicionar_manual.csv",
+        "label": "Adicionar manual",
+        "note": "Categorias fora do escopo automatico, para decidir manualmente.",
+    },
+]
+
+REVIEW_GROUP_BY_KEY = {group["key"]: group for group in REVIEW_GROUPS}
+
+
+def _normalize_review_text(value: object) -> str:
+    """Normalize product text for coarse review grouping."""
+    import unicodedata
+
+    if value is None:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(value))
+    return normalized.encode("ascii", "ignore").decode("ascii").lower()
+
+
+def _has_any(text: str, keywords: list[str]) -> bool:
+    return any(keyword in text for keyword in keywords)
+
+
+def classify_review_group(product) -> str:
+    """Classify an enriched product into one of the dry-run review groups."""
+    category = _normalize_review_text(product.category)
+    category_original = _normalize_review_text(product.category_original)
+    name = _normalize_review_text(f"{product.name} {product.name_original}")
+    combined = f"{category} {category_original} {name}"
+
+    if "pesca" in category_original or "pesca" in category:
+        return "01_pesca"
+
+    if _has_any(
+        combined,
+        [
+            "aquarismo",
+            "aquario",
+            "beteira",
+            "filtro aquario",
+            "bomba submersa",
+            "condicionador agua",
+        ],
+    ):
+        return "07_aquarismo"
+
+    if _has_any(
+        combined,
+        [
+            "farmacia",
+            "veterinaria",
+            "medicamento",
+            "remedio",
+            "antipulgas",
+            "anti pulgas",
+            "vermifugo",
+            "bravecto",
+            "simparic",
+            "nexgard",
+            "frontline",
+            "coleira antipulgas",
+            "ectoparasiticida",
+            "carrapato",
+        ],
+    ):
+        return "11_medicamentos"
+
+    is_pet = "pet" in category_original or "pet" in category or "racao" in category_original or "racao" in category
+    if is_pet:
+        if _has_any(
+            combined,
+            [
+                "higiene",
+                "higienico",
+                "sanitaria",
+                "tapete",
+                "areia",
+                "granulado",
+                "shampoo",
+                "condicionador",
+                "banho",
+                "limpeza",
+                "limpa",
+                "desinfetante",
+                "odorizador",
+                "eliminador",
+                "tosa",
+            ],
+        ):
+            return "05_pet_higiene"
+
+        if _has_any(
+            combined,
+            [
+                "roupa",
+                "vestido",
+                "camiseta",
+                "capa",
+                "laco",
+                "gravata",
+                "perfume",
+                "colonia",
+                "cosmet",
+                "fragrancia",
+            ],
+        ):
+            return "06_pet_roupas_cosmeticos"
+
+        if _has_any(
+            combined,
+            [
+                "brinquedo",
+                "mordedor",
+                "bolinha",
+                "bola",
+                "pelucia",
+                "corda",
+                "arranhador",
+                "ratinho",
+                "varinha",
+                "frisbee",
+                "disco",
+            ],
+        ):
+            return "03_pet_brinquedos"
+
+        if _has_any(
+            combined,
+            [
+                "bifinho",
+                "biscrok",
+                "biscoito",
+                "biscoitos",
+                "cookie",
+                "dentastix",
+                "deliciosso",
+                "filezitos",
+                "nattu bites",
+                "nuggets",
+                "osso",
+                "palito",
+                "pate",
+                "petisco",
+                "salapetisco",
+                "tasty bites",
+                "tranca flex",
+                "tubetes",
+                "galinha poedeira",
+            ],
+        ):
+            return "04_pet_acessorios"
+
+        if _has_any(
+            combined,
+            [
+                "racao",
+                "alimento",
+                "sache",
+                "whiskas",
+                "pedigree",
+                "royal canin",
+                "premier",
+                "golden",
+                "gran plus",
+                "granplus",
+                "special dog",
+                "special cat",
+                "farmina",
+                "guabi",
+                "monello",
+            ],
+        ):
+            weight_total = product.weight_total_kg or product.weight_kg
+            if weight_total and weight_total > 5:
+                return "99_adicionar_manual"
+            return "02_pet_racoes"
+
+        return "04_pet_acessorios"
+
+    if category_original in {"", "geral", "sem_categoria", "sem categoria"} or category in {"", "geral", "sem categoria"}:
+        return "12_revisar_sem_categoria"
+
+    return "99_adicionar_manual"
+
+
+def _review_csv_row(product, group_key: str) -> dict:
+    weight = product.weight_total_kg or product.weight_kg or ""
+    return {
+        "acao": "",
+        "sku": product.sku,
+        "ean": product.ean or "",
+        "nome": product.name,
+        "nome_original": product.name_original,
+        "marca": product.brand or "",
+        "grupo_revisao": REVIEW_GROUP_BY_KEY[group_key]["label"],
+        "categoria_sugerida": product.category,
+        "categoria_athos": product.category_original,
+        "preco": str(product.price),
+        "estoque": product.stock,
+        "peso_total_kg": weight,
+        "observacao": "",
+    }
+
+
+def _local_image_path_for_product(product) -> Optional[Path]:
+    image_dir = Path("data/images")
+    if not product.sku or not image_dir.exists():
+        return None
+
+    extensions = [".jpg", ".png", ".webp", ".avif", ".jpeg", ".gif"]
+    category_path = image_dir / category_to_folder(product.category)
+
+    if category_path.exists():
+        for ext in extensions:
+            candidate = category_path / f"{product.sku}{ext}"
+            if candidate.exists():
+                return candidate
+
+    for ext in extensions:
+        matches = list(image_dir.rglob(f"{product.sku}{ext}"))
+        if matches:
+            return matches[0]
+
+    return None
+
+
+def _write_images_review_markdown(review_dir: Path, groups: dict[str, list]) -> Path:
+    path = review_dir / "imagens.md"
+    total_products = sum(len(items) for items in groups.values())
+    total_with_image = 0
+    lines = [
+        "# Revisao de imagens",
+        "",
+        f"Gerado em: {datetime.now().isoformat(timespec='seconds')}",
+        "",
+    ]
+
+    group_image_stats = {}
+    for group in REVIEW_GROUPS:
+        key = group["key"]
+        items = groups.get(key, [])
+        with_image = 0
+        missing = []
+
+        for product in items:
+            if _local_image_path_for_product(product):
+                with_image += 1
+            elif len(missing) < 20:
+                missing.append(product)
+
+        total_with_image += with_image
+        group_image_stats[key] = {"with_image": with_image, "missing_sample": missing}
+
+    lines.append(f"Total com imagem local: {total_with_image}/{total_products}")
+    lines.append("")
+
+    for group in REVIEW_GROUPS:
+        key = group["key"]
+        items = groups.get(key, [])
+        stats = group_image_stats[key]
+        missing_count = len(items) - stats["with_image"]
+        lines.append(f"## {group['filename']}")
+        lines.append(f"- Produtos: {len(items)}")
+        lines.append(f"- Com imagem local: {stats['with_image']}")
+        lines.append(f"- Sem imagem local: {missing_count}")
+        if stats["missing_sample"]:
+            lines.append("- Primeiros sem imagem:")
+            for product in stats["missing_sample"]:
+                lines.append(f"  - {product.sku} | {product.name}")
+        lines.append("")
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    return path
+
+
+def export_dry_run_review_files(products, output_dir: Path, input_file: Optional[Path] = None) -> Path:
+    """Export dry-run review files split by coarse cleanup groups."""
+    import csv
+    import json
+    from collections import Counter
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    review_dir = output_dir / f"dry_run_refine_{timestamp}"
+    review_dir.mkdir(parents=True, exist_ok=True)
+
+    groups = {group["key"]: [] for group in REVIEW_GROUPS}
+    for product in products:
+        group_key = classify_review_group(product)
+        groups[group_key].append(product)
+
+    review_columns = [
+        "acao",
+        "sku",
+        "ean",
+        "nome",
+        "nome_original",
+        "marca",
+        "grupo_revisao",
+        "categoria_sugerida",
+        "categoria_athos",
+        "preco",
+        "estoque",
+        "peso_total_kg",
+        "observacao",
+    ]
+
+    for group in REVIEW_GROUPS:
+        key = group["key"]
+        path = review_dir / group["filename"]
+        sorted_products = sorted(
+            groups[key],
+            key=lambda p: (
+                _normalize_review_text(p.category_original),
+                _normalize_review_text(p.brand or ""),
+                _normalize_review_text(p.name),
+                p.sku,
+            ),
+        )
+        with open(path, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=review_columns, delimiter=";")
+            writer.writeheader()
+            for product in sorted_products:
+                writer.writerow(_review_csv_row(product, key))
+
+    pesca_sample = groups["01_pesca"][:50]
+    export_to_csv_full(
+        pesca_sample,
+        review_dir,
+        output_file=review_dir / "01_pesca_50_woocommerce.csv",
+    )
+
+    summary_rows = []
+    for index, group in enumerate(REVIEW_GROUPS, start=1):
+        key = group["key"]
+        items = groups[key]
+        source_categories = Counter(p.category_original or p.category for p in items)
+        summary_rows.append({
+            "ordem": index,
+            "arquivo": group["filename"],
+            "grupo": group["label"],
+            "total": len(items),
+            "categorias_athos": ", ".join(
+                f"{category} ({count})"
+                for category, count in source_categories.most_common(8)
+            ),
+            "observacao": group["note"],
+        })
+
+    with open(review_dir / "00_grupos_sugeridos.csv", "w", newline="", encoding="utf-8-sig") as f:
+        fieldnames = ["ordem", "arquivo", "grupo", "total", "categorias_athos", "observacao"]
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
+        writer.writeheader()
+        writer.writerows(summary_rows)
+
+    _write_images_review_markdown(review_dir, groups)
+
+    summary = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "input_file": str(input_file) if input_file else "",
+        "total_products": len(products),
+        "output_dir": str(review_dir),
+        "groups": [
+            {
+                "key": group["key"],
+                "label": group["label"],
+                "filename": group["filename"],
+                "count": len(groups[group["key"]]),
+                "note": group["note"],
+            }
+            for group in REVIEW_GROUPS
+        ],
+        "extra_files": [
+            "00_grupos_sugeridos.csv",
+            "01_pesca_50_woocommerce.csv",
+            "imagens.md",
+        ],
+    }
+
+    with open(review_dir / "refine_summary.json", "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
+
+    return review_dir
+
+
 def export_to_csv_lite(products, output_dir: Path) -> Path:
     """
     Export products to CSV for LITE mode (WooCommerce import).
@@ -583,13 +1036,16 @@ def export_to_csv_lite_images(products, output_dir: Path) -> Path:
     return output_file
 
 
-def export_to_csv_full(products, output_dir: Path) -> Path:
+def export_to_csv_full(products, output_dir: Path, output_file: Optional[Path] = None) -> Path:
     """Export enriched products to CSV - FORMATO PT-BR igual ao WooCommerce export."""
     import csv
     
-    output_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = output_dir / f"woocommerce_import_{timestamp}.csv"
+    if output_file is None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = output_dir / f"woocommerce_import_{timestamp}.csv"
+    else:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
     
     # Image directory for automatic image linking
     image_dir = Path("data/images")

@@ -16,7 +16,7 @@ python main.py --input data/input/Athos.csv --lite
 # Sync FULL (tudo)
 python main.py --input data/input/Athos.csv
 
-# Dry run (simula)
+# Dry run (simula e separa planilhas para revisao)
 python main.py --input data/input/Athos.csv --dry-run
 
 # Dashboard
@@ -40,7 +40,7 @@ python main.py --input data/input/Athos.csv --lite-images
 # TESTE — só PET, PESCA, AQUARISMO
 python main.py --input data/input/Athos.csv --teste
 
-# DRY RUN — simula sem gerar arquivo
+# DRY RUN - simula sync e gera planilhas de revisao por grupo
 python main.py --input data/input/Athos.csv --dry-run
 ```
 
@@ -50,10 +50,11 @@ python main.py --input data/input/Athos.csv --dry-run
 | `--lite` | Só preço/estoque |
 | `--lite-images` | Preço/estoque + imagens |
 | `--teste` | Só categorias principais |
-| `--dry-run` | Simula sem gerar |
+| `--dry-run` | Simula sync e gera `data/output/dry_run_refine_*` para revisao |
 | `--watch` | Modo contínuo |
 
-**Saída:** `data/output/woocommerce_*.csv`
+**Saída:** `data/output/woocommerce_*.csv`; no dry run tambem gera
+`data/output/dry_run_refine_YYYYMMDD_HHMMSS/` com CSVs por grupo.
 
 ---
 
