@@ -1,5 +1,5 @@
 param(
-    [string]$InputFile = "",
+    [string]$InputFile = "C:\Estoque\Athos.csv",
     [string]$ProjectRoot = ""
 )
 
@@ -31,21 +31,8 @@ if (Test-Path $lockFile) {
 New-Item -ItemType File -Force -Path $lockFile | Out-Null
 
 try {
-    if ([string]::IsNullOrWhiteSpace($InputFile)) {
-        $defaultInput = Join-Path $ProjectRoot "data\input\Athos.csv"
-        if (Test-Path $defaultInput) {
-            $InputFile = $defaultInput
-        } else {
-            $latestCsv = Get-ChildItem -Path (Join-Path $ProjectRoot "data\input") -Filter "*.csv" -File |
-                Sort-Object LastWriteTime -Descending |
-                Select-Object -First 1
-
-            if ($null -eq $latestCsv) {
-                throw "No CSV file found in data\input."
-            }
-
-            $InputFile = $latestCsv.FullName
-        }
+    if (-not (Test-Path $InputFile)) {
+        throw "Input CSV not found: $InputFile"
     }
 
     $python = Join-Path $ProjectRoot "venv\Scripts\python.exe"

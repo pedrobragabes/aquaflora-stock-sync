@@ -1,5 +1,6 @@
 param(
     [string]$ProjectRoot = "",
+    [string]$InputFile = "C:\Estoque\Athos.csv",
     [string]$TaskName = "AquaFlora Stock Sync LITE",
     [int]$IntervalHours = 2,
     [switch]$AtStartup
@@ -18,7 +19,7 @@ if (-not (Test-Path $runScript)) {
 
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -ProjectRoot `"$ProjectRoot`""
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -ProjectRoot `"$ProjectRoot`" -InputFile `"$InputFile`""
 
 $principal = New-ScheduledTaskPrincipal `
     -UserId $env:USERNAME `
@@ -53,6 +54,7 @@ Register-ScheduledTask `
 
 Write-Host "Installed scheduled task: $TaskName"
 Write-Host "Project root: $ProjectRoot"
+Write-Host "Input CSV: $InputFile"
 Write-Host "Interval: every $IntervalHours hours"
 Write-Host "At logon: $($AtStartup.IsPresent)"
 Write-Host "Test now with:"

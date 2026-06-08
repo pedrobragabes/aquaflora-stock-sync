@@ -31,7 +31,7 @@ ZERO_GHOST_STOCK=false
 
 ```powershell
 python main.py --map-site
-python main.py --input data/input/Athos.csv --lite --dry-run
+python main.py --input C:\Estoque\Athos.csv --lite --dry-run
 ```
 
 Verifique o CSV em `data/output/` e o log em `logs/`.
@@ -39,7 +39,7 @@ Verifique o CSV em `data/output/` e o log em `logs/`.
 ### 3. Rodar publicacao LITE manual
 
 ```powershell
-python main.py --input data/input/Athos.csv --lite
+python main.py --input C:\Estoque\Athos.csv --lite
 ```
 
 No modo LITE, a API envia somente os campos tecnicos necessarios para preco e estoque. O CSV LITE exportado contem somente:
@@ -62,7 +62,13 @@ Isso cria a tarefa `AquaFlora Stock Sync LITE`, que executa:
 scripts\run_sync_lite.ps1
 ```
 
-A tarefa roda a cada 2 horas e tambem no startup do Windows quando `-AtStartup` e usado.
+A tarefa roda a cada 2 horas e tambem no startup do Windows quando `-AtStartup` e usado. Por padrao, ela le o CSV em `C:\Estoque\Athos.csv`.
+
+Se o caminho mudar, instale informando o arquivo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup -InputFile "D:\OutroCaminho\Athos.csv"
+```
 
 ### 5. Testar a tarefa
 
@@ -89,7 +95,7 @@ Nao precisa rodar o bot Discord para receber notificacao de sync. O bot em `bot_
 - [ ] Python instalado no PC.
 - [ ] Dependencias instaladas em `venv`.
 - [ ] `.env` configurado com WooCommerce e Discord.
-- [ ] `data/input/Athos.csv` presente ou CSV mais recente dentro de `data/input`.
+- [ ] `C:\Estoque\Athos.csv` presente e atualizado pelo Athos.
 - [ ] `python main.py --map-site` executado.
 - [ ] Dry-run LITE conferido.
 - [ ] Publicacao LITE manual testada.

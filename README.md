@@ -6,7 +6,7 @@ O uso operacional recomendado e o modo **LITE**. Ele atualiza somente SKU, preco
 
 ## Fluxo Principal
 
-1. O ERP Athos exporta um CSV para `data/input/Athos.csv`.
+1. O ERP Athos exporta um CSV para `C:\Estoque\Athos.csv`.
 2. O script le o CSV, limpa os dados e identifica SKU, preco e estoque.
 3. No modo LITE, o WooCommerce recebe apenas atualizacoes de preco e estoque para SKUs ja existentes.
 4. Ao final, o sistema grava logs, atualiza `last_run_stats.json` e envia notificacao ao Discord se `DISCORD_WEBHOOK_URL` estiver configurado.
@@ -44,19 +44,19 @@ python main.py --map-site
 Rodar uma simulacao sem publicar na loja:
 
 ```powershell
-python main.py --input data/input/Athos.csv --lite --dry-run
+python main.py --input C:\Estoque\Athos.csv --lite --dry-run
 ```
 
 Rodar a rotina real LITE:
 
 ```powershell
-python main.py --input data/input/Athos.csv --lite
+python main.py --input C:\Estoque\Athos.csv --lite
 ```
 
 Gerar CSV LITE para importacao manual no WooCommerce:
 
 ```powershell
-python main.py --input data/input/Athos.csv --lite --dry-run
+python main.py --input C:\Estoque\Athos.csv --lite --dry-run
 ```
 
 O arquivo gerado em `data/output/woocommerce_LITE_*.csv` contem somente:
@@ -90,8 +90,8 @@ Get-Content .\logs\sync_lite_$(Get-Date -Format yyyyMMdd).log -Tail 80
 
 O script chamado pela tarefa e `scripts/run_sync_lite.ps1`. Ele:
 
-- usa `data/input/Athos.csv` quando existir;
-- se nao existir, usa o CSV mais recente de `data/input`;
+- usa `C:\Estoque\Athos.csv` por padrao;
+- falha sem publicar se esse arquivo nao existir;
 - roda `python main.py --lite`;
 - evita duas execucoes simultaneas com lock em `logs/sync_lite.lock`;
 - salva log diario em `logs/sync_lite_YYYYMMDD.log`.
