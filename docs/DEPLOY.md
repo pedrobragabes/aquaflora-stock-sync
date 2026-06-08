@@ -90,6 +90,22 @@ As notificacoes sao enviadas ao final de cada execucao quando `DISCORD_WEBHOOK_U
 
 Nao precisa rodar o bot Discord para receber notificacao de sync. O bot em `bot_control.py` serve para comandos remotos, mas a rotina automatica usa webhook.
 
+## Recuperar pais despublicados por sync antigo
+
+Se uma rotina antiga tiver enviado SKUs pai `P-...` para rascunho, rode primeiro em simulacao:
+
+```powershell
+python scripts/restore_parent_products.py
+```
+
+Depois execute a republicacao:
+
+```powershell
+python scripts/restore_parent_products.py --execute
+```
+
+O script le `last_run_stats.json`, filtra apenas SKUs `P-...` e altera somente `status=publish` e `catalog_visibility=visible`.
+
 ## Checklist operacional
 
 - [ ] Python instalado no PC.

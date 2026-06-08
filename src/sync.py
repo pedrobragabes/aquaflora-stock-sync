@@ -194,6 +194,14 @@ class WooSyncManager:
         
         # Handle ghost SKUs
         if zero_ghost_stock:
+            if self.lite_mode:
+                logger.warning(
+                    "ZERO_GHOST_STOCK ignored in LITE mode. "
+                    "LITE input is not a complete WooCommerce catalog and must not unpublish missing SKUs."
+                )
+                zero_ghost_stock = False
+
+        if zero_ghost_stock:
             ghost_skus = db.detect_ghost_skus(current_skus)
             if ghost_skus:
                 self._zero_ghost_stock(ghost_skus, db, summary)
@@ -393,6 +401,19 @@ class WooSyncManager:
         summary: SyncSummary,
     ):
         """Zero stock for products not in current file."""
+        protected_skus = [sku for sku in ghost_skus if _is_protected_parent_sku(sku)]
+        if protected_skus:
+            logger.warning(
+                "Skipping %s protected parent SKUs during ghost zeroing: %s",
+                len(protected_skus),
+                ", ".join(protected_skus[:10]),
+            )
+
+        ghost_skus = [sku for sku in ghost_skus if not _is_protected_parent_sku(sku)]
+        if not ghost_skus:
+            logger.info("No unprotected ghost SKUs to zero")
+            return
+
         if self.dry_run:
             logger.info(f"[DRY RUN] Would zero stock for {len(ghost_skus)} ghost SKUs")
             summary.ghost_skus_zeroed = ghost_skus
@@ -444,3 +465,8 @@ class WooSyncManager:
             logger.error(f"Error finding product {sku}: {e}")
         
         return None
+
+
+def _is_protected_parent_sku(sku: str) -> bool:
+    """Synthetic WooCommerce parent products do not exist in Athos CSV exports."""
+    return sku.upper().startswith("P-")

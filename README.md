@@ -128,3 +128,17 @@ docs/                      Documentacao
 - Deixe `ZERO_GHOST_STOCK=false` salvo no `.env`, salvo quando o CSV for comprovadamente o universo completo.
 - Nao use `--allow-create` na rotina automatica.
 - Nao publique FULL para rotina de preco/estoque.
+
+## Recuperar Pais Despublicados
+
+Se uma execucao antiga zerou/despublicou SKUs pai `P-...`, simule a recuperacao:
+
+```powershell
+python scripts/restore_parent_products.py
+```
+
+Se a lista estiver correta, publique esses pais novamente:
+
+```powershell
+python scripts/restore_parent_products.py --execute
+```

@@ -68,3 +68,63 @@ def test_lite_api_payload_does_not_send_content_fields(populated_database, sampl
         "images",
     }
     assert forbidden_fields.isdisjoint(update_payload)
+
+
+def test_lite_mode_ignores_ghost_zeroing(populated_database, sample_enriched_product):
+    populated_database.save_sync_result("P-PET-BEBEDOURO-PAI", 2002, "x", "x", 100)
+    product = sample_enriched_product.model_copy(
+        update={"price": Decimal("299.90"), "stock": 8}
+    )
+    fake_api = _FakeWooApi()
+    syncer = WooSyncManager(
+        woo_url="https://example.test",
+        consumer_key="ck_test",
+        consumer_secret="cs_test",
+        lite_mode=True,
+        dry_run=False,
+    )
+    syncer.wcapi = fake_api
+
+    summary = syncer.sync_products(
+        [product],
+        populated_database,
+        zero_ghost_stock=True,
+    )
+
+    assert summary.success is True
+    assert summary.ghost_skus_zeroed == []
+    assert len(fake_api.posts) == 1
+    assert fake_api.posts[0][1]["update"][0]["id"] == 1001
+
+
+def test_ghost_zeroing_skips_synthetic_parent_skus(temp_database):
+    temp_database.save_sync_result("P-PET-BEBEDOURO-PAI", 2002, "x", "x", 100)
+    temp_database.save_sync_result("SKU-GHOST", 2003, "x", "x", 100)
+    fake_api = _FakeWooApi()
+    syncer = WooSyncManager(
+        woo_url="https://example.test",
+        consumer_key="ck_test",
+        consumer_secret="cs_test",
+        lite_mode=False,
+        dry_run=False,
+    )
+    syncer.wcapi = fake_api
+
+    summary = syncer.sync_products(
+        [],
+        temp_database,
+        zero_ghost_stock=True,
+    )
+
+    assert summary.success is True
+    assert summary.ghost_skus_zeroed == ["SKU-GHOST"]
+    assert len(fake_api.posts) == 1
+    assert fake_api.posts[0][1] == {
+        "update": [
+            {
+                "id": 2003,
+                "stock_quantity": 0,
+                "status": "draft",
+            }
+        ]
+    }
