@@ -1,202 +1,98 @@
-# 🚀 Guia de Deploy - AquaFlora Stock Sync v4.0
+# Deploy e Operacao
 
-> **Guia completo para deploy em produção**
-> Última atualização: 16 Fevereiro 2026
+Este projeto deve rodar no PC local da loja com Windows quando a fonte do CSV Athos tambem estiver nesse ambiente.
 
----
+## Windows: rotina do PC do chefe
 
-## 📋 Pré-requisitos
-
-- Servidor Linux (Debian/Ubuntu) ou Windows Server
-- Docker e Docker Compose (opcional)
-- Python 3.10+ (se sem Docker)
-- 2GB RAM, 20GB disco
-- Acesso FTP ao servidor de imagens
-
----
-
-## 🖥️ Opção A: Windows (Produção Local)
-
-### 1. Instalar e Configurar
+### 1. Preparar o ambiente
 
 ```powershell
+cd C:\caminho\aquaflora-stock-sync
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
 copy .env.example .env
 notepad .env
 ```
 
-### 2. Testar
+Configure no `.env`:
+
+```env
+WOO_URL=https://aquafloragroshop.com.br
+WOO_CONSUMER_KEY=ck_xxx
+WOO_CONSUMER_SECRET=cs_xxx
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+SYNC_ENABLED=true
+DRY_RUN=false
+ZERO_GHOST_STOCK=false
+```
+
+### 2. Validar antes de publicar
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"
-python main.py --input data/input/Athos.csv --dry-run
+python main.py --map-site
+python main.py --input data/input/Athos.csv --lite --dry-run
 ```
 
-### 3. Automatizar com Task Scheduler
+Verifique o CSV em `data/output/` e o log em `logs/`.
 
-1. Abrir **Task Scheduler** (Agendador de Tarefas)
-2. Criar nova tarefa:
-   - Nome: `AquaFlora Sync`
-   - Gatilho: A cada 2 horas (ou conforme necessidade)
-   - Ação: Executar programa
-     - Programa: `powershell.exe`
-     - Argumentos: `-ExecutionPolicy Bypass -File "C:\...\scripts\run_sync.ps1"`
-
-**Exemplo de script `run_sync.ps1`:**
+### 3. Rodar publicacao LITE manual
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"
-cd "C:\caminho\aquaflora-stock-sync"
-.\venv\Scripts\Activate.ps1
-
-python main.py --input data/input/Athos.csv --lite 2>&1 |
-    Tee-Object -FilePath "logs\sync_$(Get-Date -Format yyyyMMdd).log"
+python main.py --input data/input/Athos.csv --lite
 ```
 
----
+No modo LITE, a API envia somente os campos tecnicos necessarios para preco e estoque. O CSV LITE exportado contem somente:
 
-## 🐧 Opção B: Linux (Servidor)
-
-### 1. Preparar Servidor
-
-```bash
-ssh root@<ip-servidor>
-apt update && apt upgrade -y
-apt install -y python3.10 python3-pip python3-venv git
+```csv
+SKU,Regular price,Stock
 ```
 
-### 2. Instalar
+### 4. Instalar automacao a cada 2 horas
 
-```bash
-cd /opt
-git clone <repo-url> aquaflora-stock-sync
-cd aquaflora-stock-sync
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-nano .env
+Abra PowerShell como administrador dentro do projeto:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup
 ```
 
-### 3. Serviço Systemd (sync automático)
+Isso cria a tarefa `AquaFlora Stock Sync LITE`, que executa:
 
-**`/etc/systemd/system/aquaflora-sync.service`:**
-
-```ini
-[Unit]
-Description=AquaFlora Stock Sync
-After=network.target
-
-[Service]
-Type=oneshot
-User=root
-WorkingDirectory=/opt/aquaflora-stock-sync
-Environment=PYTHONIOENCODING=utf-8
-ExecStart=/opt/aquaflora-stock-sync/venv/bin/python main.py --input data/input/Athos.csv --lite
-
-[Install]
-WantedBy=multi-user.target
+```powershell
+scripts\run_sync_lite.ps1
 ```
 
-**`/etc/systemd/system/aquaflora-sync.timer`:**
+A tarefa roda a cada 2 horas e tambem no startup do Windows quando `-AtStartup` e usado.
 
-```ini
-[Unit]
-Description=Run AquaFlora Sync every 2 hours
+### 5. Testar a tarefa
 
-[Timer]
-OnCalendar=*-*-* 0/2:00:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
+```powershell
+Start-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
+Get-Content .\logs\sync_lite_$(Get-Date -Format yyyyMMdd).log -Tail 80
 ```
 
-```bash
-systemctl daemon-reload
-systemctl enable aquaflora-sync.timer
-systemctl start aquaflora-sync.timer
-systemctl list-timers
+### 6. Conferir se ficou instalada
+
+```powershell
+Get-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
+Get-ScheduledTaskInfo -TaskName "AquaFlora Stock Sync LITE"
 ```
 
-### 4. Dashboard como Serviço
+## Discord
 
-**`/etc/systemd/system/aquaflora-dashboard.service`:**
+As notificacoes sao enviadas ao final de cada execucao quando `DISCORD_WEBHOOK_URL` esta preenchido no `.env`.
 
-```ini
-[Unit]
-Description=AquaFlora Dashboard
-After=network.target
+Nao precisa rodar o bot Discord para receber notificacao de sync. O bot em `bot_control.py` serve para comandos remotos, mas a rotina automatica usa webhook.
 
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/aquaflora-stock-sync
-Environment=PYTHONIOENCODING=utf-8
-ExecStart=/opt/aquaflora-stock-sync/venv/bin/uvicorn dashboard.app:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
+## Checklist operacional
 
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-systemctl enable aquaflora-dashboard
-systemctl start aquaflora-dashboard
-```
-
----
-
-## 🐳 Opção C: Docker
-
-```bash
-cp .env.example .env
-nano .env
-
-docker compose build
-docker compose up -d
-docker compose logs -f
-```
-
----
-
-## 🔐 Segurança
-
-- **Nunca commitar `.env`** — já está no `.gitignore`
-- **Senhas fortes** para FTP e APIs
-- **Rotacionar chaves** WooCommerce periodicamente
-- **Firewall:** liberar apenas portas 22 (SSH) e 8000 (Dashboard)
-
-### HTTPS (Nginx proxy reverso)
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name dashboard.sualoja.com.br;
-    ssl_certificate /etc/letsencrypt/live/.../fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/.../privkey.pem;
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
----
-
-## 📋 Checklist de Deploy
-
-- [ ] Python 3.10+ instalado
-- [ ] Dependências instaladas
-- [ ] `.env` configurado com credenciais
-- [ ] Diretórios criados (`data/input`, `data/output`, `data/images`, `logs`)
-- [ ] CSV do ERP copiado para `data/input/`
-- [ ] Teste dry-run funcionando
-- [ ] FTP testado
-- [ ] Automação configurada (Timer/Cron/Task Scheduler)
-- [ ] Dashboard acessível
+- [ ] Python instalado no PC.
+- [ ] Dependencias instaladas em `venv`.
+- [ ] `.env` configurado com WooCommerce e Discord.
+- [ ] `data/input/Athos.csv` presente ou CSV mais recente dentro de `data/input`.
+- [ ] `python main.py --map-site` executado.
+- [ ] Dry-run LITE conferido.
+- [ ] Publicacao LITE manual testada.
+- [ ] Tarefa Windows instalada.
+- [ ] Log diario aparecendo em `logs/sync_lite_YYYYMMDD.log`.
+- [ ] Notificacao recebida no Discord.

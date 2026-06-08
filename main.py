@@ -936,8 +936,8 @@ def export_to_csv_lite(products, output_dir: Path) -> Path:
     if not products:
         return output_file
     
-    # Minimal columns for WooCommerce import (update by SKU)
-    columns = ['SKU', 'Regular price', 'Stock', 'In stock?']
+    # Minimal columns for WooCommerce import (update by SKU): SKU, price, stock.
+    columns = ['SKU', 'Regular price', 'Stock']
     
     with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
@@ -948,7 +948,6 @@ def export_to_csv_lite(products, output_dir: Path) -> Path:
                 p.sku,
                 str(p.price),
                 p.stock,
-                1 if p.stock > 0 else 0,
             ]
             writer.writerow(row)
     

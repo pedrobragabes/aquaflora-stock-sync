@@ -1,238 +1,130 @@
-# 🐠 AquaFlora Stock Sync v4.1
+# AquaFlora Stock Sync
 
-**Sincronização automática de estoque e preços** — ERP Athos → WooCommerce via CSV.
+Sincronizacao de estoque e preco do ERP Athos para WooCommerce.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)
-![Status](https://img.shields.io/badge/Status-Produção-brightgreen.svg)
-![License](https://img.shields.io/badge/License-Private-red.svg)
+O uso operacional recomendado e o modo **LITE**. Ele atualiza somente SKU, preco e estoque, preservando nomes, descricoes, categorias, SEO, imagens e demais edicoes manuais feitas na loja.
 
----
+## Fluxo Principal
 
-## ✅ Status do Projeto
+1. O ERP Athos exporta um CSV para `data/input/Athos.csv`.
+2. O script le o CSV, limpa os dados e identifica SKU, preco e estoque.
+3. No modo LITE, o WooCommerce recebe apenas atualizacoes de preco e estoque para SKUs ja existentes.
+4. Ao final, o sistema grava logs, atualiza `last_run_stats.json` e envia notificacao ao Discord se `DISCORD_WEBHOOK_URL` estiver configurado.
 
-O sync de estoque **está funcionando em produção**. O CSV do ERP Athos é processado e gera um CSV para importação no WooCommerce, atualizando preços e estoque automaticamente.
-
-> ⚠️ **Sempre prefira o `Athos.csv` (formato limpo, separador `;`)** ao
-> "Relatório Completo" exportado do Crystal Reports. O CSV do relatório
-> longo passa pelo Excel/Crystal e perde precisão em SKUs com mais de 15
-> dígitos (float64), gerando colisões silenciosas. Veja
-> [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#-skus-de-mais-de-15-dígitos-são-corrompidos).
-
----
-
-## 🎯 O que este projeto faz
-
-1. **Lê CSV do ERP Athos** → Parser que limpa dados "sujos" do relatório
-2. **Enriquece produtos** → Detecta marca (160+), peso, gera SEO, preserva EAN/GTIN
-3. **Busca imagens** → Modo premium (Google + Vision AI) ou barato (DuckDuckGo/Bing)
-4. **Upload FTP** → Envia imagens para o servidor Hostinger
-5. **Exporta CSV WooCommerce** → Modo FULL ou LITE (só preço/estoque)
-6. **Dashboard Web** → Controle visual com FastAPI + HTMX
-7. **Bot Discord** → Comandos remotos e notificações
-
-### 📥 Formatos de entrada suportados
-
-| Arquivo | Formato | Suporte | Observação |
-|---------|---------|---------|------------|
-| `Athos.csv` | CSV `;` com header `Codigo;CodigoBarras;...` | ✅ **Recomendado** | Preserva todos os SKUs, marca e EAN |
-| `Relatório Completo Athos.csv` | CSV `,` (export do Crystal Reports) | ⚠️ Funciona com aviso | SKUs longos podem ser corrompidos pelo float64 |
-| `Athos.rpt` | Crystal Reports binário | ❌ Rejeitado | Exporte como CSV antes de usar |
-
-O parser detecta automaticamente o formato e:
-- **Valida SKUs**: avisa quando códigos têm mais de 15 dígitos (limite do float64).
-- **Deduplica**: avisa e descarta linhas com SKU repetido (last write wins).
-- **Preserva EAN**: códigos de 8/12/13/14 dígitos vão para a coluna GTIN do WooCommerce.
-
----
-
-## 🚀 Quickstart
-
-### 1. Instalar Dependências
+## Instalacao Local
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-### 2. Configurar Ambiente
-
-```powershell
 copy .env.example .env
 notepad .env
 ```
 
-**Variáveis essenciais:**
+Variaveis essenciais no `.env`:
 
 ```env
-# WooCommerce
-WOO_URL=https://sualoja.com.br
+WOO_URL=https://aquafloragroshop.com.br
 WOO_CONSUMER_KEY=ck_xxx
 WOO_CONSUMER_SECRET=cs_xxx
-
-# FTP para upload de imagens
-IMAGE_BASE_URL=https://sualoja.com.br/wp-content/uploads/produtos/
-IMAGE_FTP_HOST=sualoja.com.br
-IMAGE_FTP_USER=usuario
-IMAGE_FTP_PASSWORD=senha
-
-# Discord (opcional)
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+SYNC_ENABLED=true
+DRY_RUN=false
+ZERO_GHOST_STOCK=false
 ```
 
-### 3. Uso em Produção
+## Comandos Seguros
+
+Mapear produtos existentes na loja antes da primeira sincronizacao:
 
 ```powershell
-$env:PYTHONIOENCODING="utf-8"
+python main.py --map-site
+```
 
-# Sync LITE — só preço e estoque (uso diário)
+Rodar uma simulacao sem publicar na loja:
+
+```powershell
+python main.py --input data/input/Athos.csv --lite --dry-run
+```
+
+Rodar a rotina real LITE:
+
+```powershell
 python main.py --input data/input/Athos.csv --lite
-
-# Sync FULL — tudo (nome, descrição, imagens, preço, estoque)
-python main.py --input data/input/Athos.csv
-
-# Dry run — simula sync e gera planilhas de revisão por grupo
-python main.py --input data/input/Athos.csv --dry-run
 ```
 
-No `--dry-run`, alem do CSV WooCommerce normal, o sistema cria uma pasta
-`data/output/dry_run_refine_YYYYMMDD_HHMMSS/` com arquivos como
-`01_pesca.csv`, `02_pet_racoes.csv`, `12_revisar_sem_categoria.csv`,
-`00_grupos_sugeridos.csv`, `imagens.md` e `refine_summary.json`.
-
----
-
-## 📁 Estrutura do Projeto
-
-```
-aquaflora-stock-sync/
-├── main.py                   # CLI principal
-├── scrape_all_images.py      # Scraper de imagens
-├── upload_images.py          # Upload FTP
-├── bot_control.py            # Bot Discord
-├── tasks.ps1                 # Comandos PowerShell
-├── Makefile                  # Comandos Make
-│
-├── config/                   # Configurações
-│   ├── settings.py           # Pydantic settings (.env)
-│   ├── brands.json           # 160+ marcas
-│   ├── exclusion_list.json   # Produtos excluídos
-│   └── image_sources.json    # Regras de fontes de imagem
-│
-├── src/                      # Código principal
-│   ├── parser.py             # Parser CSV Athos
-│   ├── enricher.py           # Enriquecimento de produtos
-│   ├── database.py           # SQLite + histórico
-│   ├── sync.py               # API WooCommerce
-│   ├── image_scraper.py      # Google/Vision/DuckDuckGo
-│   ├── image_curator.py      # Curadoria de imagens
-│   ├── models.py             # Pydantic models
-│   ├── notifications.py      # Discord webhooks
-│   ├── backup.py             # Backup do banco
-│   ├── logging_config.py     # Configuração de logs
-│   └── exceptions.py         # Exceções customizadas
-│
-├── scripts/                  # Scripts utilitários
-│   ├── analyze_missing_products.py
-│   ├── delete_products_by_sku.py
-│   ├── remove_excluded_from_woocommerce.py
-│   ├── update_woo_image_urls.py
-│   ├── upload_images_ftp.py
-│   ├── upload_images_to_woocommerce.py
-│   └── run_scraper_background.ps1
-│
-├── dashboard/                # Web UI (FastAPI + HTMX)
-├── tests/                    # Testes unitários
-├── docs/                     # Documentação
-├── data/
-│   ├── input/                # CSVs do ERP
-│   ├── output/               # CSVs gerados para WooCommerce
-│   ├── images/               # Imagens organizadas por categoria
-│   └── reports/              # Relatórios
-│
-└── logs/                     # Logs do sistema
-```
-
----
-
-## 📤 Modos de Exportação
-
-| Modo | Comando | O que atualiza |
-|------|---------|---------------|
-| **FULL** | `python main.py --input Athos.csv` | Tudo: nome, descrição, imagens, preço, estoque |
-| **LITE** | `python main.py --input Athos.csv --lite` | Só preço e estoque (preserva SEO) |
-| **LITE+IMG** | `python main.py --input Athos.csv --lite-images` | Preço, estoque e imagens |
-| **TESTE** | `python main.py --input Athos.csv --teste` | Só PET, PESCA, AQUARISMO |
-
----
-
-## 🖼️ Sistema de Imagens
-
-Imagens organizadas em `data/images/{categoria}/`:
-
-| Pasta | Departamentos |
-|-------|--------------|
-| `pesca/` | GERAL PESCA, PESCA |
-| `pet/` | PET |
-| `aquarismo/` | AQUARISMO |
-| `racao/` | RAÇÃO |
-| `farmacia/` | FARMÁCIA |
-| `passaros/` | PÁSSAROS |
-| `aves/` | AVES |
-| `piscina/` | PISCINA |
-| `cutelaria/` | CUTELARIA |
-| `tabacaria/` | TABACARIA |
-| `ferramentas/` | FERRAMENTAS |
-| `insumo/` | INSUMO |
-| `geral/` | Outros |
+Gerar CSV LITE para importacao manual no WooCommerce:
 
 ```powershell
-# Buscar imagens faltantes
-python scrape_all_images.py --only-missing-images --cheap --workers 4
-
-# Upload para servidor
-python upload_images.py
-
-# Analisar cobertura
-python scripts/analyze_missing_products.py
+python main.py --input data/input/Athos.csv --lite --dry-run
 ```
 
----
+O arquivo gerado em `data/output/woocommerce_LITE_*.csv` contem somente:
 
-## 🐳 Docker
+```csv
+SKU,Regular price,Stock
+```
+
+## Automacao no PC do Chefe
+
+O caminho recomendado e o Agendador de Tarefas do Windows.
+
+Instalar tarefa para rodar a cada 2 horas e tambem ao ligar o PC:
 
 ```powershell
-docker compose build
-docker compose up -d
-docker compose logs -f
+powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup
 ```
 
----
+Testar a tarefa manualmente:
 
-## 📚 Documentação
+```powershell
+Start-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
+```
 
-| Documento | Descrição |
-|-----------|-----------|
-| [COMANDOS.md](docs/COMANDOS.md) | Referência de comandos |
-| [DEPLOY.md](docs/DEPLOY.md) | Guia de deploy em servidor |
-| [contexto.md](docs/contexto.md) | Contexto técnico |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitetura do sistema |
-| [CHANGELOG.md](docs/CHANGELOG.md) | Histórico de versões |
-| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Resolução de problemas |
+Verificar o historico:
 
----
+```powershell
+Get-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
+Get-Content .\logs\sync_lite_$(Get-Date -Format yyyyMMdd).log -Tail 80
+```
 
-## 🔧 Requisitos
+O script chamado pela tarefa e `scripts/run_sync_lite.ps1`. Ele:
 
-- Python 3.10+
-- 2GB RAM (recomendado)
-- Credenciais WooCommerce
-- Acesso FTP (para imagens)
-- Google Cloud (opcional, para Vision AI)
+- usa `data/input/Athos.csv` quando existir;
+- se nao existir, usa o CSV mais recente de `data/input`;
+- roda `python main.py --lite`;
+- evita duas execucoes simultaneas com lock em `logs/sync_lite.lock`;
+- salva log diario em `logs/sync_lite_YYYYMMDD.log`.
 
----
+## Modos
 
-## 📝 Licença
+| Modo | Comando | Uso |
+| --- | --- | --- |
+| LITE | `python main.py --input data/input/Athos.csv --lite` | Rotina diaria: preco e estoque |
+| LITE dry-run | `python main.py --input data/input/Athos.csv --lite --dry-run` | Teste sem publicar |
+| FULL | `python main.py --input data/input/Athos.csv` | Recriacao completa de cadastro; usar com cuidado |
+| LITE+IMG | `python main.py --input data/input/Athos.csv --lite-images` | Preco, estoque e imagens |
 
-Projeto privado — AquaFlora Agroshop © 2026
+## Estrutura
+
+```text
+main.py                    CLI principal
+src/parser.py              Parser do CSV Athos
+src/enricher.py            Normalizacao e enriquecimento
+src/sync.py                Envio para WooCommerce
+src/notifications.py       Webhook Discord/Telegram
+src/database.py            SQLite local e whitelist
+scripts/run_sync_lite.ps1  Execucao operacional LITE no Windows
+scripts/install_windows_tasks.ps1 Instalacao do agendamento Windows
+dashboard/                 Dashboard FastAPI
+tests/                     Testes automatizados
+docs/                      Documentacao
+```
+
+## Regras de Seguranca
+
+- Use LITE para rotina automatica.
+- Rode `--map-site` antes da primeira sincronizacao real.
+- Deixe `ZERO_GHOST_STOCK=false` salvo no `.env`, salvo quando o CSV for comprovadamente o universo completo.
+- Nao use `--allow-create` na rotina automatica.
+- Nao publique FULL para rotina de preco/estoque.
