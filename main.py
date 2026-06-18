@@ -1308,7 +1308,7 @@ def map_site_products():
     if not settings.woo_configured:
         logger.error("❌ WooCommerce credentials not configured!")
         logger.error("   Configure WOO_URL, WOO_CONSUMER_KEY, WOO_CONSUMER_SECRET in .env")
-        return
+        return False
     
     from woocommerce import API as WooAPI
     
@@ -1330,6 +1330,7 @@ def map_site_products():
     per_page = 100
     total_mapped = 0
     total_without_sku = 0
+    had_error = False
     
     logger.info("📥 Fetching products from WooCommerce (this may take a while)...")
     
@@ -1343,6 +1344,7 @@ def map_site_products():
             
             if response.status_code != 200:
                 logger.error(f"API Error: {response.status_code}")
+                had_error = True
                 break
             
             products = response.json()
@@ -1368,10 +1370,12 @@ def map_site_products():
             
         except Exception as e:
             logger.error(f"Error fetching page {page}: {e}")
+            had_error = True
             break
     
     db.close()
-    
+    success = total_mapped > 0 and not had_error
+
     print("\n" + "="*60)
     print("📊 MAPEAMENTO CONCLUÍDO")
     print("="*60)
@@ -1380,6 +1384,7 @@ def map_site_products():
     print(f"\n🛡️  Whitelist salva em: {settings.db_path}")
     print("   Agora você pode rodar sync com segurança!")
     print("="*60)
+    return success
 
 
 def watch_mode():
@@ -1490,7 +1495,8 @@ def main():
     setup_logging(args.log_level)
     
     if args.map_site:
-        map_site_products()
+        if not map_site_products():
+            sys.exit(1)
     elif args.watch:
         watch_mode()
     elif args.input:

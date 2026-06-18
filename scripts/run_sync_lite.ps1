@@ -1,6 +1,8 @@
 param(
     [string]$InputFile = "C:\Estoque\Athos.csv",
-    [string]$ProjectRoot = ""
+    [string]$ProjectRoot = "",
+    [switch]$SkipMapSiteDaily,
+    [switch]$MapSiteEveryRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,6 +20,7 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 $lockFile = Join-Path $logDir "sync_lite.lock"
 $logFile = Join-Path $logDir ("sync_lite_{0}.log" -f (Get-Date -Format "yyyyMMdd"))
+$mapMarkerFile = Join-Path $logDir ("map_site_{0}.ok" -f (Get-Date -Format "yyyyMMdd"))
 
 if (Test-Path $lockFile) {
     $ageMinutes = ((Get-Date) - (Get-Item $lockFile).LastWriteTime).TotalMinutes
@@ -39,6 +42,23 @@ try {
     $python = Join-Path $ProjectRoot "venv\Scripts\python.exe"
     if (-not (Test-Path $python)) {
         $python = "python"
+    }
+
+    if ($MapSiteEveryRun.IsPresent -or (-not $SkipMapSiteDaily.IsPresent -and -not (Test-Path $mapMarkerFile))) {
+        "[$(Get-Date -Format s)] Mapping WooCommerce site before sync..." |
+            Tee-Object -FilePath $logFile -Append
+
+        & $python "main.py" --map-site 2>&1 |
+            Tee-Object -FilePath $logFile -Append
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "map-site exited with code $LASTEXITCODE"
+        }
+
+        New-Item -ItemType File -Force -Path $mapMarkerFile | Out-Null
+
+        "[$(Get-Date -Format s)] WooCommerce site mapping finished." |
+            Tee-Object -FilePath $logFile -Append
     }
 
     "[$(Get-Date -Format s)] Starting AquaFlora LITE sync: $InputFile" |

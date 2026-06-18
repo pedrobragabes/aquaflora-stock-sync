@@ -3,7 +3,9 @@ param(
     [string]$InputFile = "C:\Estoque\Athos.csv",
     [string]$TaskName = "AquaFlora Stock Sync LITE",
     [int]$IntervalHours = 2,
-    [switch]$AtStartup
+    [switch]$AtStartup,
+    [switch]$NoMapSiteDaily,
+    [switch]$MapSiteEveryRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,9 +19,18 @@ if (-not (Test-Path $runScript)) {
     throw "Run script not found: $runScript"
 }
 
+$mapSiteDailyArg = ""
+if ($NoMapSiteDaily.IsPresent) {
+    $mapSiteDailyArg = " -SkipMapSiteDaily"
+}
+$mapEveryRunArg = ""
+if ($MapSiteEveryRun.IsPresent) {
+    $mapEveryRunArg = " -MapSiteEveryRun"
+}
+
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -ProjectRoot `"$ProjectRoot`" -InputFile `"$InputFile`""
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -ProjectRoot `"$ProjectRoot`" -InputFile `"$InputFile`"$mapSiteDailyArg$mapEveryRunArg"
 
 $principal = New-ScheduledTaskPrincipal `
     -UserId $env:USERNAME `
@@ -57,5 +68,7 @@ Write-Host "Project root: $ProjectRoot"
 Write-Host "Input CSV: $InputFile"
 Write-Host "Interval: every $IntervalHours hours"
 Write-Host "At logon: $($AtStartup.IsPresent)"
+Write-Host "Map site daily: $(-not $NoMapSiteDaily.IsPresent)"
+Write-Host "Map site every run: $($MapSiteEveryRun.IsPresent)"
 Write-Host "Test now with:"
 Write-Host "  Start-ScheduledTask -TaskName `"$TaskName`""

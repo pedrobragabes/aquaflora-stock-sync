@@ -92,9 +92,22 @@ O script chamado pela tarefa e `scripts/run_sync_lite.ps1`. Ele:
 
 - usa `C:\Estoque\Athos.csv` por padrao;
 - falha sem publicar se esse arquivo nao existir;
+- roda `python main.py --map-site` uma vez por dia antes do sync;
 - roda `python main.py --lite`;
 - evita duas execucoes simultaneas com lock em `logs/sync_lite.lock`;
 - salva log diario em `logs/sync_lite_YYYYMMDD.log`.
+
+Para forcar o mapeamento em toda execucao, reinstale a tarefa com:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup -MapSiteEveryRun
+```
+
+Para desligar o mapeamento diario automatico:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup -NoMapSiteDaily
+```
 
 ## Modos
 
