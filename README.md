@@ -13,13 +13,27 @@ O uso operacional recomendado e o modo **LITE**. Ele atualiza somente SKU, preco
 
 ## Instalacao Local
 
+Abra o PowerShell na pasta do projeto. No Windows, use sempre o Python do
+ambiente virtual de forma explicita; nao dependa da ativacao do ambiente nem do
+comando global `python`.
+
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+py -m venv venv
+.\venv\Scripts\python.exe -m pip install --upgrade pip
+.\venv\Scripts\python.exe -m pip install -r .\requirements.txt
 copy .env.example .env
 notepad .env
 ```
+
+Confirme que o ambiente esta correto:
+
+```powershell
+Test-Path .\venv\Scripts\python.exe
+.\venv\Scripts\python.exe -c "import pydantic_settings; print('VENV OK')"
+```
+
+Se aparecer `VENV OK`, os comandos operacionais podem ser executados. Se
+`Test-Path` retornar `False`, recrie o `venv` com os comandos acima.
 
 Variaveis essenciais no `.env`:
 
@@ -33,30 +47,50 @@ DRY_RUN=false
 ZERO_GHOST_STOCK=false
 ```
 
+## Atualizar um PC Ja Instalado
+
+Depois de receber uma atualizacao do Git, atualize tambem as dependencias do
+`venv` antes de testar o sync:
+
+```powershell
+git pull --ff-only
+.\venv\Scripts\python.exe -m pip install -r .\requirements.txt
+.\venv\Scripts\python.exe -m pip check
+```
+
+O `.env`, o `products.db`, os logs e os CSVs em `data/input` e `data/output`
+sao locais e nao sao substituidos pelo Git.
+
 ## Comandos Seguros
 
 Mapear produtos existentes na loja antes da primeira sincronizacao:
 
 ```powershell
-python main.py --map-site
+.\venv\Scripts\python.exe .\main.py --map-site
 ```
+
+Esse comando consulta o WooCommerce e atualiza somente a whitelist local em
+`products.db`; ele nao altera produtos no site.
 
 Rodar uma simulacao sem publicar na loja:
 
 ```powershell
-python main.py --input C:\Estoque\Athos.csv --lite --dry-run
+.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite --dry-run
 ```
 
 Rodar a rotina real LITE:
 
 ```powershell
-python main.py --input C:\Estoque\Athos.csv --lite
+.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite
 ```
+
+O comando real atualiza somente preco e estoque dos SKUs previamente mapeados.
+Ele nao cria produtos e nao altera nomes, descricoes, categorias ou imagens.
 
 Gerar CSV LITE para importacao manual no WooCommerce:
 
 ```powershell
-python main.py --input C:\Estoque\Athos.csv --lite --dry-run
+.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite --dry-run
 ```
 
 O arquivo gerado em `data/output/woocommerce_LITE_*.csv` contem somente:
@@ -84,16 +118,36 @@ Start-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
 Verificar o historico:
 
 ```powershell
-Get-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
-Get-Content .\logs\sync_lite_$(Get-Date -Format yyyyMMdd).log -Tail 80
+$task = Get-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
+$task | Select-Object TaskName, State
+$task | Get-ScheduledTaskInfo |
+    Format-List LastRunTime, LastTaskResult, NextRunTime, NumberOfMissedRuns
+$task.Actions | Format-List Execute, Arguments
+
+$log = Get-ChildItem .\logs\sync_lite_*.log |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+$log.FullName
+Get-Content $log.FullName -Tail 150
 ```
+
+`LastTaskResult: 0` indica conclusao normal. O codigo decimal `267009`
+normalmente indica que a tarefa ainda esta executando. Para comprovar que o
+WooCommerce recebeu mudancas, procure no log por `Whitelist`, `Batch updated`,
+`Sync complete` e `AquaFlora LITE sync finished`.
+
+A notificacao verde do Discord significa que o processo terminou sem erro
+registrado, mas nao garante sozinha que houve alteracao. Confira o campo
+`Atualizados`: se ele for zero, consulte o log para distinguir "nenhuma mudanca
+necessaria" de produtos ignorados por falta de mapeamento.
 
 O script chamado pela tarefa e `scripts/run_sync_lite.ps1`. Ele:
 
 - usa `C:\Estoque\Athos.csv` por padrao;
 - falha sem publicar se esse arquivo nao existir;
-- roda `python main.py --map-site` uma vez por dia antes do sync;
-- roda `python main.py --lite`;
+- prefere `venv\Scripts\python.exe` e so usa o Python global se o `venv` nao existir;
+- roda `main.py --map-site` uma vez por dia antes do sync;
+- roda `main.py --lite` para atualizar somente preco e estoque;
 - evita duas execucoes simultaneas com lock em `logs/sync_lite.lock`;
 - salva log diario em `logs/sync_lite_YYYYMMDD.log`.
 
@@ -113,10 +167,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -At
 
 | Modo | Comando | Uso |
 | --- | --- | --- |
-| LITE | `python main.py --input data/input/Athos.csv --lite` | Rotina diaria: preco e estoque |
-| LITE dry-run | `python main.py --input data/input/Athos.csv --lite --dry-run` | Teste sem publicar |
-| FULL | `python main.py --input data/input/Athos.csv` | Recriacao completa de cadastro; usar com cuidado |
-| LITE+IMG | `python main.py --input data/input/Athos.csv --lite-images` | Preco, estoque e imagens |
+| LITE | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite` | Rotina diaria: preco e estoque |
+| LITE dry-run | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite --dry-run` | Teste sem publicar |
+| FULL | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv"` | Recriacao completa de cadastro; usar com cuidado |
+| LITE+IMG | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite-images` | Preco, estoque e imagens |
 
 ## Estrutura
 
@@ -136,24 +190,39 @@ docs/                      Documentacao
 
 ## Regras de Seguranca
 
+- Use sempre `.\venv\Scripts\python.exe`; `python main.py` pode chamar um
+  interpretador global sem as dependencias do projeto.
 - Use LITE para rotina automatica.
 - Rode `--map-site` antes da primeira sincronizacao real.
 - Deixe `ZERO_GHOST_STOCK=false` salvo no `.env`, salvo quando o CSV for comprovadamente o universo completo.
 - Nao use `--allow-create` na rotina automatica.
 - Nao publique FULL para rotina de preco/estoque.
 
+## Erro `No module named pydantic_settings`
+
+Esse erro indica que o comando usou um Python sem as dependencias do projeto.
+Nao corrija instalando pacotes aleatoriamente no Python global. Execute:
+
+```powershell
+Test-Path .\venv\Scripts\python.exe
+.\venv\Scripts\python.exe -m pip install -r .\requirements.txt
+.\venv\Scripts\python.exe -c "import pydantic_settings; print('VENV OK')"
+```
+
+Depois repita o comando desejado usando `.\venv\Scripts\python.exe`.
+
 ## Recuperar Pais Despublicados
 
 Se uma execucao antiga zerou/despublicou SKUs pai `P-...`, simule a recuperacao:
 
 ```powershell
-python scripts/restore_parent_products.py
+.\venv\Scripts\python.exe .\scripts\restore_parent_products.py
 ```
 
 Se a lista estiver correta, publique esses pais novamente:
 
 ```powershell
-python scripts/restore_parent_products.py --execute
+.\venv\Scripts\python.exe .\scripts\restore_parent_products.py --execute
 ```
 
 ## Reconstruir Somente Produtos Diversos
@@ -165,7 +234,7 @@ do WooCommerce antigo; atualiza preço e estoque pelo Athos; e deixa o `ID` vazi
 para o importador localizar cada produto pelo SKU.
 
 ```powershell
-python scripts/build_diversos_import.py `
+.\venv\Scripts\python.exe .\scripts\build_diversos_import.py `
   --athos "C:\caminho\Athos.csv" `
   --current-pet-fishing "C:\caminho\wc-export-pet-pesca-atual.csv" `
   --legacy-all "C:\caminho\wc-export-antigo-completo.csv" `
