@@ -125,9 +125,9 @@ class ProductDatabase:
         # Ensure price_history table exists (for existing databases)
         try:
             cursor.execute(self.PRICE_HISTORY_SCHEMA)
+            cursor.executescript(self.INDEX_SCHEMA)
+            cursor.executescript(self.PRODUCT_IMAGES_INDEX)
             self.conn.commit()
-        except sqlite3.OperationalError:
-            pass
         except sqlite3.OperationalError as e:
             logger.debug(f"Index creation note: {e}")
     

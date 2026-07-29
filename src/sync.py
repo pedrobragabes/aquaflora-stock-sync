@@ -327,22 +327,25 @@ class WooSyncManager:
         # Build batch payload - LITE MODE COMPATIBLE
         # Only sends: id, regular_price, stock_quantity, manage_stock, stock_status
         # Does NOT send: name, description, short_description, categories, images, attributes
-        batch_data = []
+        batch_entries = []
         for product in products:
             woo_id = db.get_woo_id(product.sku)
             if woo_id:
                 stock_status = 'instock' if product.stock > 0 else 'outofstock'
-                batch_data.append({
-                    'id': woo_id,
-                    'regular_price': str(product.price),
-                    'stock_quantity': product.stock,
-                    'manage_stock': True,
-                    'stock_status': stock_status,
-                })
+                batch_entries.append((product, {
+                        'id': woo_id,
+                        'regular_price': str(product.price),
+                        'stock_quantity': product.stock,
+                        'manage_stock': True,
+                        'stock_status': stock_status,
+                    }))
+
+        successful_skus = set()
         
         # Process in chunks of BATCH_SIZE
-        for i in range(0, len(batch_data), self.BATCH_SIZE):
-            chunk = batch_data[i:i + self.BATCH_SIZE]
+        for i in range(0, len(batch_entries), self.BATCH_SIZE):
+            entries = batch_entries[i:i + self.BATCH_SIZE]
+            chunk = [payload for _, payload in entries]
             
             try:
                 response = self.wcapi.post(
@@ -352,9 +355,25 @@ class WooSyncManager:
                 
                 if response.status_code == 200:
                     result = response.json()
-                    updated = len(result.get('update', []))
+                    returned = result.get('update', [])
+                    successful_ids = {
+                        item.get('id')
+                        for item in returned
+                        if isinstance(item, dict) and item.get('id') and not item.get('error')
+                    }
+                    successful_chunk = [
+                        product for product, payload in entries
+                        if payload['id'] in successful_ids
+                    ]
+                    successful_skus.update(product.sku for product in successful_chunk)
+                    updated = len(successful_chunk)
                     summary.fast_updates += updated
                     logger.info(f"Batch updated {updated} products")
+                    missing = len(entries) - updated
+                    if missing:
+                        summary.errors.append(
+                            f"Batch returned no success confirmation for {missing} product(s)"
+                        )
                 else:
                     logger.warning(f"Batch update failed: {response.status_code}")
                     summary.errors.append(f"Batch update failed: {response.status_code}")
@@ -363,8 +382,11 @@ class WooSyncManager:
                 logger.error(f"Batch update error: {e}")
                 summary.errors.append(f"Batch error: {str(e)}")
         
-        # Update hashes in DB for fast updates and track changes
+        # Persist only products explicitly confirmed by WooCommerce. Recording a
+        # failed batch would make the next run skip changes that never reached the site.
         for product in products:
+            if product.sku not in successful_skus:
+                continue
             woo_id = db.get_woo_id(product.sku)
             if woo_id:
                 # Get old price for tracking

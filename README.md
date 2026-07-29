@@ -155,3 +155,24 @@ Se a lista estiver correta, publique esses pais novamente:
 ```powershell
 python scripts/restore_parent_products.py --execute
 ```
+
+## Reconstruir Somente Produtos Diversos
+
+Quando pet, pesca e ração já estiverem corrigidos no site, use o reconciliador
+para recuperar do export antigo somente os demais produtos que ainda existem
+no Athos atual. O comando preserva nome, descrição, categorias, imagens e marca
+do WooCommerce antigo; atualiza preço e estoque pelo Athos; e deixa o `ID` vazio
+para o importador localizar cada produto pelo SKU.
+
+```powershell
+python scripts/build_diversos_import.py `
+  --athos "C:\caminho\Athos.csv" `
+  --current-pet-fishing "C:\caminho\wc-export-pet-pesca-atual.csv" `
+  --legacy-all "C:\caminho\wc-export-antigo-completo.csv" `
+  --split-dir "data\output\diversos_por_departamento"
+```
+
+Com `--split-dir`, o script gera um CSV por departamento Athos e
+`99_todos_produtos_diversos.csv` com a união exata de todos eles. O script não
+publica no site. Produtos do export antigo ausentes no Athos atual ficam apenas
+no relatório e não são reimportados.

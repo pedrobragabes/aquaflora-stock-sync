@@ -49,6 +49,7 @@ scheduler = AsyncIOScheduler()
 SCHEDULER_JOB_ID = "daily_sync"
 WHITELIST_JOB_ID = "weekly_whitelist"
 ACTION_LOG_FILE = Path("logs/actions.log")
+MAX_CSV_UPLOAD_BYTES = 10 * 1024 * 1024
 
 # Security for Basic Auth
 security = HTTPBasic()
@@ -162,6 +163,19 @@ templates = Jinja2Templates(directory=templates_path)
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+def safe_input_csv_path(filename: str) -> Path:
+    """Resolve a CSV filename inside input_dir and reject path traversal."""
+    if not filename or "/" in filename or "\\" in filename:
+        raise ValueError("Nome de arquivo inválido")
+    if Path(filename).name != filename or Path(filename).suffix.casefold() != ".csv":
+        raise ValueError("Apenas nomes simples de arquivos CSV são aceitos")
+
+    input_dir = settings.input_dir.resolve()
+    candidate = (input_dir / filename).resolve()
+    if candidate.parent != input_dir:
+        raise ValueError("Arquivo fora da pasta de entrada")
+    return candidate
 
 def get_dashboard_stats() -> dict:
     """Get stats for dashboard display."""
@@ -622,7 +636,13 @@ async def api_run_sync(
             status_code=409,
         )
     
-    filepath = settings.input_dir / filename
+    try:
+        filepath = safe_input_csv_path(filename)
+    except ValueError as exc:
+        return JSONResponse(
+            {"success": False, "message": str(exc)},
+            status_code=400,
+        )
     if not filepath.exists():
         return JSONResponse(
             {"success": False, "message": f"Arquivo não encontrado: {filename}"},
@@ -655,18 +675,24 @@ async def api_actions_run(
 @app.post("/api/sync/upload")
 async def api_upload_csv(file: UploadFile = File(...)):
     """Upload a CSV file to input directory."""
-    if not file.filename.endswith('.csv'):
+    try:
+        filepath = safe_input_csv_path(file.filename or "")
+    except ValueError as exc:
         return JSONResponse(
-            {"success": False, "message": "Apenas arquivos CSV são aceitos"},
+            {"success": False, "message": str(exc)},
             status_code=400,
         )
     
     # Save file
-    filepath = settings.input_dir / file.filename
     settings.input_dir.mkdir(parents=True, exist_ok=True)
     
     try:
-        content = await file.read()
+        content = await file.read(MAX_CSV_UPLOAD_BYTES + 1)
+        if len(content) > MAX_CSV_UPLOAD_BYTES:
+            return JSONResponse(
+                {"success": False, "message": "CSV excede o limite de 10 MB"},
+                status_code=413,
+            )
         with open(filepath, 'wb') as f:
             f.write(content)
         

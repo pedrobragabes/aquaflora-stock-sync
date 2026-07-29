@@ -171,6 +171,25 @@ class TestSyncResult:
         assert last_price == 150.0
 
 
+def test_database_creates_declared_indexes(temp_database):
+    product_indexes = {
+        row["name"]
+        for row in temp_database.conn.execute("PRAGMA index_list(products)").fetchall()
+    }
+    history_indexes = {
+        row["name"]
+        for row in temp_database.conn.execute("PRAGMA index_list(price_history)").fetchall()
+    }
+    image_indexes = {
+        row["name"]
+        for row in temp_database.conn.execute("PRAGMA index_list(product_images)").fetchall()
+    }
+
+    assert {"idx_woo_id", "idx_last_sync", "idx_exists_on_site"} <= product_indexes
+    assert {"idx_price_history_sku", "idx_price_history_date"} <= history_indexes
+    assert "idx_product_images_status" in image_indexes
+
+
 class TestGhostSKUs:
     """Tests for ghost SKU detection."""
     

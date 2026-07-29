@@ -19,6 +19,23 @@ def enricher():
     return ProductEnricher()
 
 
+def test_negative_erp_stock_is_clamped_to_zero(enricher):
+    raw = RawProduct(
+        sku="999",
+        name="PRODUTO COM AJUSTE PENDENTE",
+        stock=-2,
+        minimum=0,
+        price=10,
+        cost=5,
+        department="GERAL",
+    )
+
+    enriched = enricher.enrich(raw)
+
+    assert enriched.stock == 0
+    assert enriched.published is False
+
+
 class TestBrandDetection:
     """Tests for brand detection functionality."""
     

@@ -292,7 +292,7 @@ class ProductEnricher:
         
         # Round stock toward nearest integer (KG products like "15,338" lose
         # the fractional kg here — WooCommerce manages stock as integers).
-        stock_int = int(round(raw.stock))
+        stock_int = max(0, int(round(raw.stock)))
 
         return EnrichedProduct(
             sku=raw.sku,

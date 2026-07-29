@@ -8,6 +8,8 @@ python-dotenv>=1.0.0
 
 # HTTP client
 httpx>=0.25.0
+requests>=2.31.0
+aiohttp>=3.9.0
 
 # Database
 # sqlite3 is built into Python
@@ -20,6 +22,7 @@ python-multipart>=0.0.6
 
 # Scheduler (optional)
 apscheduler>=3.10.0
+watchdog>=3.0.0
 
 # Discord Bot
 py-cord>=2.4.0
@@ -27,6 +30,7 @@ py-cord>=2.4.0
 # Image Processing (Scraper)
 Pillow>=10.0.0
 duckduckgo-search>=6.0.0
+paramiko>=3.4.0
 
 # Development and Testing
 pytest>=7.0.0
