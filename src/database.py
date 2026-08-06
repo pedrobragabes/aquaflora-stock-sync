@@ -148,10 +148,26 @@ class ProductDatabase:
             INSERT INTO products (sku, woo_id, exists_on_site, created_at)
             VALUES (?, ?, 1, ?)
             ON CONFLICT(sku) DO UPDATE SET
-                woo_id = ?,
-                exists_on_site = 1
+                woo_id = excluded.woo_id,
+                exists_on_site = 1,
+                last_hash_full = CASE
+                    WHEN products.woo_id IS NOT excluded.woo_id THEN NULL
+                    ELSE products.last_hash_full
+                END,
+                last_hash_fast = CASE
+                    WHEN products.woo_id IS NOT excluded.woo_id THEN NULL
+                    ELSE products.last_hash_fast
+                END,
+                last_price = CASE
+                    WHEN products.woo_id IS NOT excluded.woo_id THEN NULL
+                    ELSE products.last_price
+                END,
+                last_sync = CASE
+                    WHEN products.woo_id IS NOT excluded.woo_id THEN NULL
+                    ELSE products.last_sync
+                END
             """,
-            (sku, woo_id, now, woo_id)
+            (sku, woo_id, now)
         )
         self.conn.commit()
     
@@ -165,13 +181,15 @@ class ProductDatabase:
         row = cursor.fetchone()
         if not row:
             return False
-        # Consider existing if explicitly marked OR has a valid woo_id
-        return bool(row['exists_on_site']) or bool(row['woo_id'])
+        # The whitelist is authoritative.  Keeping an old Woo ID is useful for
+        # detecting a replacement during the next mapping, but must never make
+        # a product eligible after it disappeared from the site.
+        return bool(row['exists_on_site'])
     
     def get_site_products_count(self) -> int:
         """Get count of products that exist on site."""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) as count FROM products WHERE exists_on_site = 1 OR woo_id IS NOT NULL")
+        cursor.execute("SELECT COUNT(*) as count FROM products WHERE exists_on_site = 1")
         return cursor.fetchone()['count']
     
     def clear_whitelist(self):
@@ -180,6 +198,29 @@ class ProductDatabase:
         cursor.execute("UPDATE products SET exists_on_site = 0")
         self.conn.commit()
         logger.info("Whitelist cleared")
+
+    def invalidate_woo_mapping(self, sku: str, woo_id: Optional[int] = None):
+        """Disable a mapping rejected by WooCommerce and force a future retry.
+
+        A batch endpoint can return HTTP 200 while an individual product inside
+        it fails (for example, after that product was deleted).  Do not retain
+        that stale mapping or its hashes as a successful synchronization.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE products
+            SET exists_on_site = 0,
+                woo_id = NULL,
+                last_hash_full = NULL,
+                last_hash_fast = NULL,
+                last_price = NULL,
+                last_sync = NULL
+            WHERE sku = ? AND (? IS NULL OR woo_id = ?)
+            """,
+            (sku, woo_id, woo_id),
+        )
+        self.conn.commit()
     
     def get_sync_decision(
         self, 
@@ -323,7 +364,7 @@ class ProductDatabase:
         cursor.execute("SELECT COUNT(*) as total FROM products")
         total = cursor.fetchone()['total']
         
-        cursor.execute("SELECT COUNT(*) as with_woo FROM products WHERE woo_id IS NOT NULL")
+        cursor.execute("SELECT COUNT(*) as with_woo FROM products WHERE exists_on_site = 1")
         with_woo = cursor.fetchone()['with_woo']
         
         return {

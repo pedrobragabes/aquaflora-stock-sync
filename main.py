@@ -243,7 +243,7 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
         logger.info(f"🧹 Dry-run review files: {review_dir}")
     
     # 6. Send notifications
-    if settings.discord_webhook_configured:
+    if settings.discord_webhook_configured and not effective_dry_run:
         logger.info("📨 Sending notifications...")
         notifier = NotificationService(
             discord_webhook_url=settings.discord_webhook_url,
@@ -251,13 +251,18 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
         )
         notifier.send_report(summary)
         notifier.close()
+    elif effective_dry_run:
+        logger.info("Dry run: notification suppressed (no product was changed)")
     
     # 7. Save last run stats for bot commands
-    summary.to_json_file("last_run_stats.json")
+    if not effective_dry_run:
+        summary.to_json_file("last_run_stats.json")
+    else:
+        logger.info("Dry run: last_run_stats.json left unchanged")
     logger.debug("📊 Saved last_run_stats.json for bot commands")
     
     # 8. Run backup if enabled
-    if settings.backup_configured and summary.success:
+    if settings.backup_configured and summary.success and not effective_dry_run:
         from src.backup import run_backup
         logger.info("☁️ Running backup to cloud storage...")
         try:
