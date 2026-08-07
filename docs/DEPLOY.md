@@ -48,7 +48,7 @@ No modo LITE, a API envia somente os campos tecnicos necessarios para preco e es
 SKU,Regular price,Stock
 ```
 
-### 4. Instalar automacao a cada 2 horas
+### 4. Instalar automacao a cada 1 hora
 
 Abra PowerShell como administrador dentro do projeto:
 
@@ -62,7 +62,11 @@ Isso cria a tarefa `AquaFlora Stock Sync LITE`, que executa:
 scripts\run_sync_lite.ps1
 ```
 
-A tarefa roda a cada 2 horas e tambem no startup do Windows quando `-AtStartup` e usado. Por padrao, ela le o CSV em `C:\Estoque\Athos.csv`.
+A tarefa roda a cada 1 hora e tambem no startup do Windows quando `-AtStartup` e usado. Por padrao, ela le o CSV em `C:\Estoque\Athos.csv`.
+
+O Athos continua gerando o arquivo a cada 2 horas. Executar o LITE a cada hora
+reduz o atraso sem duplicar atualizacoes: produtos cujo hash de preco/estoque
+nao mudou sao classificados como `SKIP` e nao geram escrita no WooCommerce.
 
 Se o caminho mudar, instale informando o arquivo:
 
