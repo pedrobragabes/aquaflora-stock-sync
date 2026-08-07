@@ -334,12 +334,12 @@ class WooSyncManager:
         # Build batch payload - LITE MODE COMPATIBLE
         # Only sends: id, regular_price, stock_quantity, manage_stock, stock_status
         # Does NOT send: name, description, short_description, categories, images, attributes
-        batch_data = []
+        batch_entries = []
         for product in products:
             woo_id = db.get_woo_id(product.sku)
             if woo_id:
                 stock_status = 'instock' if product.stock > 0 else 'outofstock'
-                batch_data.append((product, {
+                batch_entries.append((product, {
                     'id': woo_id,
                     'regular_price': str(product.price),
                     'stock_quantity': product.stock,
@@ -348,9 +348,9 @@ class WooSyncManager:
                 }))
         
         # Process in chunks of BATCH_SIZE
-        for i in range(0, len(batch_data), self.BATCH_SIZE):
-            chunk = batch_data[i:i + self.BATCH_SIZE]
-            payload = [item[1] for item in chunk]
+        for i in range(0, len(batch_entries), self.BATCH_SIZE):
+            entries = batch_entries[i:i + self.BATCH_SIZE]
+            payload = [item[1] for item in entries]
             
             try:
                 response = self.wcapi.post(
@@ -367,8 +367,12 @@ class WooSyncManager:
                     # when one or more individual updates contain an error.
                     # Match each response to its submitted ID; only those are
                     # allowed to advance the local synchronization state.
-                    for (product, submitted), item in zip(chunk, returned):
-                        if isinstance(item, dict) and item.get('id') == submitted['id']:
+                    for (product, submitted), item in zip(entries, returned):
+                        if (
+                            isinstance(item, dict)
+                            and item.get('id') == submitted['id']
+                            and not item.get('error')
+                        ):
                             old_price = db.get_last_price(product.sku)
                             new_price = float(product.price)
                             variation = 0.0
@@ -405,7 +409,7 @@ class WooSyncManager:
 
                     # A malformed/truncated response must be treated as failed,
                     # never silently recorded as success.
-                    for product, submitted in chunk[len(returned):]:
+                    for product, submitted in entries[len(returned):]:
                         summary.errors.append(
                             f"Batch update failed for {product.sku}: missing_batch_result"
                         )
@@ -414,7 +418,7 @@ class WooSyncManager:
                     summary.fast_updates += succeeded
                     logger.info(
                         "Batch updated %s products; %s failed",
-                        succeeded, len(chunk) - succeeded,
+                        succeeded, len(entries) - succeeded,
                     )
                 else:
                     logger.warning(f"Batch update failed: {response.status_code}")

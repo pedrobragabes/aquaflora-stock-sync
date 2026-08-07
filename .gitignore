@@ -43,6 +43,10 @@ desktop.ini
 # Database
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Runtime State
 last_run_stats.json
@@ -81,6 +85,9 @@ scripts/.old/
 *.bak
 *.backup
 *.orig
+*.pid
+*.lock
+~$*
 
 # Test/Coverage
 .pytest_cache/
@@ -93,9 +100,16 @@ node_modules/
 package-lock.json
 
 # AI/Agent artifacts
+.agents/
+.codex/
 .gemini/
 .copilot/
 .cursor/
+
+# Local application secrets
+.streamlit/secrets.toml
+credentials*.json
+service-account*.json
 
 # Linting/Type checking
 .mypy_cache/

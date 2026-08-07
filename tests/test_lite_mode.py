@@ -20,6 +20,19 @@ class _FakeWooApi:
         return _FakeResponse()
 
 
+class _FailedResponse:
+    status_code = 500
+
+    def json(self):
+        return {"message": "failure"}
+
+
+class _FailedWooApi(_FakeWooApi):
+    def post(self, endpoint, payload):
+        self.posts.append((endpoint, payload))
+        return _FailedResponse()
+
+
 class _PartialFailureResponse:
     status_code = 200
 
@@ -115,6 +128,30 @@ def test_lite_mode_ignores_ghost_zeroing(populated_database, sample_enriched_pro
     assert summary.ghost_skus_zeroed == []
     assert len(fake_api.posts) == 1
     assert fake_api.posts[0][1]["update"][0]["id"] == 1001
+
+
+def test_failed_batch_does_not_mark_product_as_synced(populated_database, sample_enriched_product):
+    product = sample_enriched_product.model_copy(
+        update={"price": Decimal("299.90"), "stock": 8}
+    )
+    old_record = populated_database.get_record(product.sku)
+
+    syncer = WooSyncManager(
+        woo_url="https://example.test",
+        consumer_key="ck_test",
+        consumer_secret="cs_test",
+        lite_mode=True,
+        dry_run=False,
+    )
+    syncer.wcapi = _FailedWooApi()
+
+    summary = syncer.sync_products([product], populated_database)
+    new_record = populated_database.get_record(product.sku)
+
+    assert summary.success is False
+    assert summary.fast_updates == 0
+    assert new_record.last_hash_fast == old_record.last_hash_fast
+    assert new_record.last_price == old_record.last_price
 
 
 def test_lite_batch_item_error_is_not_recorded_as_success(

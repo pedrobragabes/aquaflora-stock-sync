@@ -5,12 +5,19 @@ Pydantic Settings for type-safe configuration from .env
 
 from pathlib import Path
 from typing import Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
     
     # WooCommerce API
     woo_url: str = Field(default="https://aquafloragroshop.com.br")
@@ -70,12 +77,6 @@ class Settings(BaseSettings):
     image_ftp_password: str = Field(default="")
     image_ftp_port: int = Field(default=21)
     image_use_sftp: bool = Field(default=False)  # True = SFTP, False = FTP
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        extra = "ignore"  # Allow extra env vars like GOOGLE_API_KEY
     
     @property
     def woo_configured(self) -> bool:
