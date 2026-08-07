@@ -2,7 +2,7 @@ param(
     [string]$ProjectRoot = "",
     [string]$InputFile = "C:\Estoque\Athos.csv",
     [string]$TaskName = "AquaFlora Stock Sync LITE",
-    [int]$IntervalHours = 2,
+    [int]$IntervalHours = 1,
     [switch]$AtStartup,
     [switch]$NoMapSiteDaily,
     [switch]$MapSiteEveryRun

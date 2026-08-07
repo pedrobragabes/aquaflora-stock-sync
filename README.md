@@ -103,11 +103,17 @@ SKU,Regular price,Stock
 
 O caminho recomendado e o Agendador de Tarefas do Windows.
 
-Instalar tarefa para rodar a cada 2 horas e tambem ao ligar o PC:
+Instalar tarefa para rodar a cada 1 hora e tambem ao ligar o PC:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup
 ```
+
+O Athos gera `C:\Estoque\Athos.csv` a cada 2 horas. A frequencia horaria do
+sincronizador reduz para menos de 1 hora o atraso entre um novo arquivo e a
+atualizacao no WooCommerce. Quando preco e estoque nao mudaram, os hashes em
+`products.db` fazem o LITE registrar `SKIP` e evitam uma escrita desnecessaria
+no WooCommerce.
 
 Testar a tarefa manualmente:
 
