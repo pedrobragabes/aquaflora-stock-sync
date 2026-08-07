@@ -96,6 +96,13 @@ class WooSyncManager:
         current_skus = {p.sku for p in products}
         
         for product in products:
+            # A historical database record is not proof that the product still
+            # exists in WooCommerce.  The daily whitelist is authoritative.
+            if not self.allow_create and not db.exists_on_site(product.sku):
+                skipped_not_on_site += 1
+                logger.debug(f"SKU {product.sku}: SKIPPED (not on site, creation disabled)")
+                continue
+
             decision, warning = db.get_sync_decision(
                 product, self.price_guard_max_variation
             )
@@ -333,47 +340,86 @@ class WooSyncManager:
             if woo_id:
                 stock_status = 'instock' if product.stock > 0 else 'outofstock'
                 batch_entries.append((product, {
-                        'id': woo_id,
-                        'regular_price': str(product.price),
-                        'stock_quantity': product.stock,
-                        'manage_stock': True,
-                        'stock_status': stock_status,
-                    }))
-
-        successful_skus = set()
+                    'id': woo_id,
+                    'regular_price': str(product.price),
+                    'stock_quantity': product.stock,
+                    'manage_stock': True,
+                    'stock_status': stock_status,
+                }))
         
         # Process in chunks of BATCH_SIZE
         for i in range(0, len(batch_entries), self.BATCH_SIZE):
             entries = batch_entries[i:i + self.BATCH_SIZE]
-            chunk = [payload for _, payload in entries]
+            payload = [item[1] for item in entries]
             
             try:
                 response = self.wcapi.post(
                     "products/batch",
-                    {"update": chunk}
+                    {"update": payload}
                 )
                 
                 if response.status_code == 200:
                     result = response.json()
                     returned = result.get('update', [])
-                    successful_ids = {
-                        item.get('id')
-                        for item in returned
-                        if isinstance(item, dict) and item.get('id') and not item.get('error')
-                    }
-                    successful_chunk = [
-                        product for product, payload in entries
-                        if payload['id'] in successful_ids
-                    ]
-                    successful_skus.update(product.sku for product in successful_chunk)
-                    updated = len(successful_chunk)
-                    summary.fast_updates += updated
-                    logger.info(f"Batch updated {updated} products")
-                    missing = len(entries) - updated
-                    if missing:
+                    succeeded = 0
+
+                    # WooCommerce uses HTTP 200 for a valid batch request even
+                    # when one or more individual updates contain an error.
+                    # Match each response to its submitted ID; only those are
+                    # allowed to advance the local synchronization state.
+                    for (product, submitted), item in zip(entries, returned):
+                        if (
+                            isinstance(item, dict)
+                            and item.get('id') == submitted['id']
+                            and not item.get('error')
+                        ):
+                            old_price = db.get_last_price(product.sku)
+                            new_price = float(product.price)
+                            variation = 0.0
+                            if old_price and old_price > 0:
+                                variation = ((new_price - old_price) / old_price) * 100
+
+                            db.save_sync_result(
+                                product.sku, submitted['id'],
+                                product.hash_full, product.hash_fast, new_price,
+                            )
+                            summary.product_changes.append(ProductChange(
+                                sku=product.sku,
+                                name=product.name,
+                                change_type='updated',
+                                old_price=old_price,
+                                new_price=new_price,
+                                old_stock=None,
+                                new_stock=product.stock,
+                                price_variation=round(variation, 2),
+                            ))
+                            succeeded += 1
+                        else:
+                            detail = item if isinstance(item, dict) else {}
+                            code = detail.get('code', 'missing_batch_result')
+                            message = detail.get('message', '')
+                            summary.errors.append(
+                                f"Batch update failed for {product.sku}: {code} {message}".strip()
+                            )
+                            db.invalidate_woo_mapping(product.sku, submitted['id'])
+                            logger.warning(
+                                "Batch update failed for SKU %s (Woo ID %s): %s %s",
+                                product.sku, submitted['id'], code, message,
+                            )
+
+                    # A malformed/truncated response must be treated as failed,
+                    # never silently recorded as success.
+                    for product, submitted in entries[len(returned):]:
                         summary.errors.append(
-                            f"Batch returned no success confirmation for {missing} product(s)"
+                            f"Batch update failed for {product.sku}: missing_batch_result"
                         )
+                        db.invalidate_woo_mapping(product.sku, submitted['id'])
+
+                    summary.fast_updates += succeeded
+                    logger.info(
+                        "Batch updated %s products; %s failed",
+                        succeeded, len(entries) - succeeded,
+                    )
                 else:
                     logger.warning(f"Batch update failed: {response.status_code}")
                     summary.errors.append(f"Batch update failed: {response.status_code}")
@@ -382,39 +428,6 @@ class WooSyncManager:
                 logger.error(f"Batch update error: {e}")
                 summary.errors.append(f"Batch error: {str(e)}")
         
-        # Persist only products explicitly confirmed by WooCommerce. Recording a
-        # failed batch would make the next run skip changes that never reached the site.
-        for product in products:
-            if product.sku not in successful_skus:
-                continue
-            woo_id = db.get_woo_id(product.sku)
-            if woo_id:
-                # Get old price for tracking
-                old_price = db.get_last_price(product.sku)
-                new_price = float(product.price)
-                
-                # Calculate variation
-                price_variation = 0.0
-                if old_price and old_price > 0:
-                    price_variation = ((new_price - old_price) / old_price) * 100
-                
-                # Track the change
-                summary.product_changes.append(ProductChange(
-                    sku=product.sku,
-                    name=product.name,
-                    change_type='updated',
-                    old_price=old_price,
-                    new_price=new_price,
-                    old_stock=None,  # Could be added if needed
-                    new_stock=product.stock,
-                    price_variation=round(price_variation, 2),
-                ))
-                
-                db.save_sync_result(
-                    product.sku, woo_id,
-                    product.hash_full, product.hash_fast,
-                    new_price
-                )
     
     def _zero_ghost_stock(
         self,
