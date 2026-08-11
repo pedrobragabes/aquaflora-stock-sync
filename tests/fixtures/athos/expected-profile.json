@@ -1,0 +1,81 @@
+{
+  "catalog": {
+    "uniqueBrandCount": 9,
+    "uniqueDepartmentCount": 8,
+    "unitCounts": {
+      "CART": 1,
+      "CJ": 1,
+      "CX": 1,
+      "DUZIA": 1,
+      "KG": 1,
+      "M": 1,
+      "ML": 1,
+      "PACOTE": 1,
+      "PARES": 1,
+      "PC": 1,
+      "POTE": 1,
+      "SACO": 1,
+      "TUBO": 1,
+      "UNID": 2
+    }
+  },
+  "identifiers": {
+    "codigoAllStartWithZero": true,
+    "codigoAllTenDigits": true,
+    "codigoBarrasAbsent": 1,
+    "codigoBarrasDuplicateRows": 0,
+    "codigoBarrasUniqueCount": 14,
+    "codigoDuplicateRows": 0,
+    "codigoUniqueCount": 15,
+    "gtinLengthCandidates": 5,
+    "invalidGtin": 1,
+    "validGtin": 4
+  },
+  "inventory": {
+    "fractional": 4,
+    "fractionalByUnit": {
+      "KG": 1,
+      "M": 1,
+      "ML": 1,
+      "UNID": 1
+    },
+    "invalid": 0,
+    "negative": 1,
+    "positive": 13,
+    "zero": 1
+  },
+  "layout": {
+    "columnCount": 12,
+    "columns": [
+      "Codigo",
+      "CodigoBarras",
+      "Descricao",
+      "Unidade",
+      "Custo",
+      "Preco",
+      "Preco2",
+      "Estoque",
+      "DepartamentoCod",
+      "Departamento",
+      "MarcaCod",
+      "Marca"
+    ],
+    "delimiter": ";",
+    "emptyFields": 1,
+    "encoding": "utf-8-sig",
+    "hasUtf8Bom": true,
+    "malformedRows": 0,
+    "rowCount": 15
+  },
+  "price": {
+    "invalid": 0,
+    "negative": 0,
+    "positive": 15,
+    "zero": 0
+  },
+  "source": {
+    "byteSize": 1997,
+    "fileName": "athos-current-synthetic.csv",
+    "sha256": "f1336e46ceaea1496c2ca28e577e140e652e09d4dd5b7b7f6ae214f4003865e5"
+  }
+}
