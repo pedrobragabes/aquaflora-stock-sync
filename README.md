@@ -61,6 +61,22 @@ git pull --ff-only
 O `.env`, o `products.db`, os logs e os CSVs em `data/input` e `data/output`
 sao locais e nao sao substituidos pelo Git.
 
+### Perfil agregado seguro do Athos
+
+Para conferir um novo export sem publicar produtos, descricoes, identificadores,
+precos ou estoques individuais:
+
+```powershell
+.\venv\Scripts\python.exe .\scripts\profile_athos_export.py `
+    "C:\Estoque\Athos.csv" `
+    --output ".\data\output\athos-profile.json"
+```
+
+O JSON contem somente hash do arquivo, formato, contagens agregadas, unidades e
+estatisticas de identificadores/preco/estoque. Revise o arquivo antes de
+anexa-lo a uma issue. A fixture versionada em `tests/fixtures/athos` e
+completamente sintetica e nao contem linhas do cadastro real.
+
 ## Comandos Seguros
 
 Mapear produtos existentes na loja antes da primeira sincronizacao:
