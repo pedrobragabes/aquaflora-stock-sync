@@ -115,6 +115,17 @@ O arquivo gerado em `data/output/woocommerce_LITE_*.csv` contem somente:
 SKU,Regular price,Stock
 ```
 
+## Testes
+
+Execute a suíte antes de alterar o fluxo de catálogo ou publicar uma atualização operacional:
+
+```powershell
+.\venv\Scripts\python.exe -m pytest -q
+.\venv\Scripts\python.exe -m pip check
+```
+
+Os testes usam fixtures sintéticas e não exigem acesso ao Athos, WooCommerce ou Discord.
+
 ## Automacao no PC do Chefe
 
 O caminho recomendado e o Agendador de Tarefas do Windows.
