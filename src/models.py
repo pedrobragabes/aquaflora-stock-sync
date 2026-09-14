@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Pydantic Models
+Legacy ERP Stock Sync - Pydantic Models
 Data models for products, sync decisions, and API payloads.
 """
 

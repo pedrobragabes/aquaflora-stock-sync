@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Premium Notification Service
+Legacy ERP Stock Sync - Premium Notification Service
 Sends rich sync reports via Discord/Telegram webhooks.
 """
 
@@ -12,8 +12,6 @@ from .models import SyncSummary, ProductChange
 
 logger = logging.getLogger(__name__)
 
-# AquaFlora branding
-AQUAFLORA_LOGO = "https://aquafloragroshop.com.br/wp-content/uploads/2021/08/cropped-logo-aquaflora-agroshop-1.png"
 
 # Status colors (Semaphore system)
 COLOR_SUCCESS = 0x2ECC71  # Green
@@ -188,16 +186,12 @@ class NotificationService:
             
             # Build embed
             embed = {
-                "title": f"📦 Sync Report - AquaFlora",
+                "title": f"📦 Sync Report - Retail",
                 "description": description,
                 "color": color,
                 "fields": fields,
-                "thumbnail": {
-                    "url": AQUAFLORA_LOGO
-                },
                 "footer": {
-                    "text": f"AquaFlora Stock Sync • Python Edition • {summary.total_synced} sincronizados",
-                    "icon_url": AQUAFLORA_LOGO
+                    "text": f"Legacy ERP Stock Sync • Python Edition • {summary.total_synced} sincronizados",
                 },
                 "timestamp": summary.timestamp.isoformat(),
             }
@@ -221,7 +215,7 @@ class NotificationService:
             emoji = "✅" if summary.success else "❌"
             
             message = f"""
-{emoji} *Sync Report - AquaFlora*
+{emoji} *Sync Report - Retail*
 
 📊 Processados: {summary.total_parsed}
 ✨ Novos: {summary.new_products}
@@ -262,7 +256,6 @@ class NotificationService:
                     "title": title,
                     "description": message,
                     "color": COLOR_ERROR if is_error else COLOR_SUCCESS,
-                    "thumbnail": {"url": AQUAFLORA_LOGO},
                 }
                 self._client.post(self.discord_url, json={"embeds": [embed]})
             except Exception as e:

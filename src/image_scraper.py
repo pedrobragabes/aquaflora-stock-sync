@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Image Scraper Module
+Legacy ERP Stock Sync - Image Scraper Module
 Search and download product images using Google Custom Search (primary) 
 with DuckDuckGo/Bing as fallback.
 Includes Vision AI integration for image quality validation.

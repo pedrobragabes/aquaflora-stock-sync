@@ -1,10 +1,10 @@
-# AquaFlora Stock Sync - Dockerfile
+# Legacy ERP Stock Sync - Dockerfile
 # Optimized for production deployment
 
 FROM python:3.11-slim
 
 # Labels
-LABEL org.opencontainers.image.title="AquaFlora Stock Sync"
+LABEL org.opencontainers.image.title="Legacy ERP Stock Sync"
 LABEL org.opencontainers.image.description="Stock synchronization between Athos ERP and WooCommerce"
 LABEL org.opencontainers.image.version="2.0"
 

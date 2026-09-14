@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Configuration Settings
+Legacy ERP Stock Sync - Configuration Settings
 Pydantic Settings for type-safe configuration from .env
 """
 
@@ -19,8 +19,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     
+    # Presentation; tenant-specific values belong in the local environment.
+    app_name: str = Field(default="Legacy ERP Stock Sync")
+    store_name: str = Field(default="Loja")
+
     # WooCommerce API
-    woo_url: str = Field(default="https://aquafloragroshop.com.br")
+    woo_url: str = Field(default="https://store.example.invalid")
     woo_consumer_key: str = Field(default="")
     woo_consumer_secret: str = Field(default="")
     
@@ -59,12 +63,12 @@ class Settings(BaseSettings):
     
     # Backup
     backup_enabled: bool = Field(default=False)
-    backup_rclone_remote: str = Field(default="gdrive:aquaflora-backup")
+    backup_rclone_remote: str = Field(default="gdrive:retail-backup")
     backup_retention_days: int = Field(default=7)
     
     # Image Upload Configuration
     # URL base onde as imagens estarão acessíveis publicamente
-    # Exemplo: https://aquafloragroshop.com.br/wp-content/uploads/produtos/
+    # Exemplo: https://store.example.invalid/wp-content/uploads/produtos/
     image_base_url: str = Field(default="")
     
     # Pasta remota no servidor WordPress para upload das imagens

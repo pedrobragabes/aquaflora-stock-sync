@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AquaFlora Stock Sync - Main Entry Point
+Legacy ERP Stock Sync - Main Entry Point
 Sync Athos ERP data with WooCommerce.
 
 Usage:
@@ -13,6 +13,7 @@ Usage:
 """
 
 import argparse
+from html import escape
 import logging
 import sys
 import io
@@ -110,7 +111,7 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
         logger.info("🚀 Starting Sync in LITE MODE (Price & Stock only)")
         logger.info("⚠️  Content fields (name, description, images) will NOT be updated")
     else:
-        logger.info(f"Starting AquaFlora Stock Sync (FULL MODE)")
+        logger.info(f"Starting Legacy ERP Stock Sync (FULL MODE)")
     
     if not allow_create:
         logger.info("🛡️  Safety: New products will NOT be created (use --allow-create to enable)")
@@ -1131,9 +1132,9 @@ def export_to_csv_full(products, output_dir: Path, output_file: Optional[Path] =
             
             # Descrição curta com marca
             if p.brand:
-                short_desc = f"{p.name} | Marca: {p.brand} | Categoria: {p.category} | AquaFlora Agroshop"
+                short_desc = f"{p.name} | Marca: {p.brand} | Categoria: {p.category} | {escape(settings.store_name)}"
             else:
-                short_desc = f"{p.name} | Categoria: {p.category} | AquaFlora Agroshop"
+                short_desc = f"{p.name} | Categoria: {p.category} | {escape(settings.store_name)}"
             
             peso_total = p.weight_total_kg or p.weight_kg
             peso_unit = p.weight_unit_kg
@@ -1147,7 +1148,7 @@ def export_to_csv_full(products, output_dir: Path, output_file: Optional[Path] =
             if p.brand and peso_total:
                 description = f'''<div class="product-description">
 <h2>{p.name}</h2>
-<p>Produto <strong>{p.brand}</strong> da linha {p.category}. Disponível na <strong>AquaFlora Agroshop</strong> com <strong>{peso_display}</strong> e melhor custo-benefício.</p>
+<p>Produto <strong>{p.brand}</strong> da linha {p.category}. Disponível na <strong>{escape(settings.store_name)}</strong> com <strong>{peso_display}</strong> e melhor custo-benefício.</p>
 <ul class="product-features">
   <li>🏷️ <strong>Marca:</strong> {p.brand}</li>
     <li>⚖️ <strong>Peso/Conteúdo:</strong> {peso_display}{' (' + str(peso_qty) + 'x ' + peso_unit_display + ')' if peso_qty and peso_unit else ''}</li>
@@ -1158,13 +1159,13 @@ def export_to_csv_full(products, output_dir: Path, output_file: Optional[Path] =
 </ul>
 <div class="cta-section">
 <p>📞 <strong>Dúvidas?</strong> Nossa equipe está pronta para ajudar!</p>
-<p>⭐ <strong>AquaFlora Agroshop</strong> - Sua loja de confiança!</p>
+<p>⭐ <strong>{escape(settings.store_name)}</strong> - Sua loja de confiança!</p>
 </div>
 </div>'''
             elif p.brand:
                 description = f'''<div class="product-description">
 <h2>{p.name}</h2>
-<p>Produto <strong>{p.brand}</strong> da linha {p.category}. Disponível na <strong>AquaFlora Agroshop</strong> com melhor custo-benefício.</p>
+<p>Produto <strong>{p.brand}</strong> da linha {p.category}. Disponível na <strong>{escape(settings.store_name)}</strong> com melhor custo-benefício.</p>
 <ul class="product-features">
   <li>🏷️ <strong>Marca:</strong> {p.brand}</li>
   <li>📦 <strong>Categoria:</strong> {p.category}</li>
@@ -1174,13 +1175,13 @@ def export_to_csv_full(products, output_dir: Path, output_file: Optional[Path] =
 </ul>
 <div class="cta-section">
 <p>📞 <strong>Dúvidas?</strong> Nossa equipe está pronta para ajudar!</p>
-<p>⭐ <strong>AquaFlora Agroshop</strong> - Sua loja de confiança!</p>
+<p>⭐ <strong>{escape(settings.store_name)}</strong> - Sua loja de confiança!</p>
 </div>
 </div>'''
             else:
                 description = f'''<div class="product-description">
 <h2>{p.name}</h2>
-<p>Produto de alta qualidade da categoria {p.category}. Disponível na <strong>AquaFlora Agroshop</strong> com melhor custo-benefício.</p>
+<p>Produto de alta qualidade da categoria {p.category}. Disponível na <strong>{escape(settings.store_name)}</strong> com melhor custo-benefício.</p>
 <ul class="product-features">
   <li>📦 <strong>Categoria:</strong> {p.category}</li>
   <li>✅ <strong>Produto Original</strong> com garantia</li>
@@ -1189,7 +1190,7 @@ def export_to_csv_full(products, output_dir: Path, output_file: Optional[Path] =
 </ul>
 <div class="cta-section">
 <p>📞 <strong>Dúvidas?</strong> Nossa equipe está pronta para ajudar!</p>
-<p>⭐ <strong>AquaFlora Agroshop</strong> - Sua loja de confiança!</p>
+<p>⭐ <strong>{escape(settings.store_name)}</strong> - Sua loja de confiança!</p>
 </div>
 </div>'''
             
@@ -1440,7 +1441,7 @@ def watch_mode():
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="AquaFlora Stock Sync - Sync Athos ERP with WooCommerce"
+        description="Legacy ERP Stock Sync - Sync Athos ERP with WooCommerce"
     )
     parser.add_argument(
         "--input", "-i",

@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Web Dashboard
+Legacy ERP Stock Sync - Web Dashboard
 FastAPI application for controlling stock synchronization.
 """
 
@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AquaFlora Stock Sync",
+    title=settings.app_name,
     description="""
 ## Dashboard de Controle de Sincronização de Estoque
 
@@ -158,6 +158,7 @@ assets_path = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=static_path), name="static")
 app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 templates = Jinja2Templates(directory=templates_path)
+templates.env.globals["app_name"] = settings.app_name
 
 
 # =============================================================================
@@ -1113,7 +1114,7 @@ if __name__ == "__main__":
         datefmt="%H:%M:%S"
     )
     
-    print("🖥️  AquaFlora Stock Sync - Dashboard")
+    print("🖥️  Legacy ERP Stock Sync - Dashboard")
     print("   Acesse: http://localhost:8080")
     print("   Pressione Ctrl+C para parar")
     

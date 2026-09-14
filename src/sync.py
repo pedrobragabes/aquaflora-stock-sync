@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - WooCommerce Sync Manager
+Legacy ERP Stock Sync - WooCommerce Sync Manager
 Handles synchronization with WooCommerce API, including batch updates and retries.
 """
 

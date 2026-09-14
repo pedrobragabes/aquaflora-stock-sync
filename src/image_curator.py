@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Image Curator Service
+Legacy ERP Stock Sync - Image Curator Service
 High-level service for curating product images with prefetch support.
 """
 

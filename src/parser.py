@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Athos ERP Parser
+Legacy ERP Stock Sync - Athos ERP Parser
 Parses the "dirty" CSV files exported from Athos ERP.
 
 Supports two input formats:

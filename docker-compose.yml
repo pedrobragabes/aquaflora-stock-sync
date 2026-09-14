@@ -1,5 +1,5 @@
-# AquaFlora Stock Sync - Docker Compose
-# Production-ready configuration for Proxmox deployment
+# Legacy ERP Stock Sync - Docker Compose
+# Optional local packaging; review credentials and network exposure before use.
 
 services:
   # Web Dashboard (FastAPI)

@@ -1,11 +1,11 @@
 """
-AquaFlora Stock Sync - Custom Exceptions
+Legacy ERP Stock Sync - Custom Exceptions
 Specific exception classes for better error handling and debugging.
 """
 
 
 class AquaFloraError(Exception):
-    """Base exception for all AquaFlora Stock Sync errors."""
+    """Base exception for all Legacy ERP Stock Sync errors."""
     
     def __init__(self, message: str, context: dict = None):
         super().__init__(message)

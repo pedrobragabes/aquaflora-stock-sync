@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Backup Module
+Legacy ERP Stock Sync - Backup Module
 Backup database and stats to cloud storage via rclone.
 """
 

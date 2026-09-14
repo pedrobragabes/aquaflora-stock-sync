@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Product Database
+Legacy ERP Stock Sync - Product Database
 SQLite handler for product sync state with dual hash tracking.
 """
 

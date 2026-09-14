@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - src package
+Legacy ERP Stock Sync - src package
 """
 
 from .parser import AthosParser

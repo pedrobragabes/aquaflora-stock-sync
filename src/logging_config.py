@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Logging Configuration
+Legacy ERP Stock Sync - Logging Configuration
 Provides JSON and standard formatters for structured logging.
 """
 

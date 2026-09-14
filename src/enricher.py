@@ -1,5 +1,5 @@
 """
-AquaFlora Stock Sync - Product Enricher
+Legacy ERP Stock Sync - Product Enricher
 Enriches products with brand detection, weight extraction, SEO content.
 Ported from processador-estoque-v4.1.js
 """
@@ -469,7 +469,7 @@ class ProductEnricher:
         desc = name
         if brand:
             desc += f" | Marca: {brand}"
-        desc += f" | Categoria: {category} | AquaFlora Agroshop"
+        desc += f" | Categoria: {category}"
         return desc
     
     def _generate_html_description(
@@ -532,7 +532,6 @@ class ProductEnricher:
         # Category-specific CTA
         lines.append('<div class="cta-section">')
         lines.append(f'<p>{category_seo["cta"]}</p>')
-        lines.append('<p>⭐ <strong>AquaFlora Agroshop</strong> - Sua loja de confiança!</p>')
         lines.append('</div>')
         lines.append('</div>')
         
@@ -608,7 +607,7 @@ class ProductEnricher:
         
         # Default template
         return {
-            'intro': 'da linha premium. Qualidade AquaFlora Agroshop.',
+            'intro': 'da linha premium. ',
             'benefits': [
                 '✅ <strong>Produto Original</strong> com garantia',
                 '🚚 <strong>Entrega Rápida</strong> para todo o Brasil',

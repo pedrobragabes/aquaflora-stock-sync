@@ -1,4 +1,4 @@
-# AquaFlora Stock Sync - Python Dependencies
+# Legacy ERP Stock Sync - Python Dependencies
 
 # Core
 woocommerce>=3.0.0
