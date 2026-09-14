@@ -24,7 +24,7 @@ class BackupManager:
     
     def __init__(
         self,
-        rclone_remote: str = "gdrive:aquaflora-backup",
+        rclone_remote: str = "gdrive:retail-backup",
         retention_days: int = 7,
     ):
         """
@@ -187,7 +187,7 @@ class BackupManager:
 def run_backup(
     db_path: Path,
     stats_path: Optional[Path] = None,
-    rclone_remote: str = "gdrive:aquaflora-backup",
+    rclone_remote: str = "gdrive:retail-backup",
     retention_days: int = 7,
 ) -> bool:
     """

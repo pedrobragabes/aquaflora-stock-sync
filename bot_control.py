@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AquaFlora Stock Sync - Discord Bot Controller 2.0
+Legacy ERP Stock Sync - Discord Bot Controller 2.0
 Remote control and monitoring for stock sync via Discord commands.
 
 Usage:
@@ -38,8 +38,6 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# AquaFlora branding
-AQUAFLORA_LOGO = "https://aquafloragroshop.com.br/wp-content/uploads/2021/08/cropped-logo-aquaflora-agroshop-1.png"
 COLOR_PRIMARY = 0x2ECC71  # Green
 COLOR_INFO = 0x3498DB     # Blue
 COLOR_WARNING = 0xF1C40F  # Yellow
@@ -76,7 +74,7 @@ def create_bot() -> commands.Bot:
     bot = commands.Bot(
         command_prefix="!",
         intents=intents,
-        description="AquaFlora Stock Sync Controller 2.0"
+        description="Legacy ERP Stock Sync Controller 2.0"
     )
     
     @bot.event
@@ -100,11 +98,10 @@ def create_bot() -> commands.Bot:
     async def help_cmd(ctx):
         """Show available commands with rich embed."""
         embed = discord.Embed(
-            title="🤖 AquaFlora Stock Bot - Menu de Comandos",
+            title="🤖 ERP Stock Bot - Menu de Comandos",
             description="Controle e monitore a sincronização de estoque diretamente pelo Discord!",
             color=COLOR_PRIMARY
         )
-        embed.set_thumbnail(url=AQUAFLORA_LOGO)
         
         embed.add_field(
             name="📊 **Informativos**",
@@ -135,8 +132,7 @@ def create_bot() -> commands.Bot:
         )
         
         embed.set_footer(
-            text="AquaFlora Stock Sync • Bot 2.0",
-            icon_url=AQUAFLORA_LOGO
+            text="Legacy ERP Stock Sync • Bot 2.0",
         )
         
         await ctx.send(embed=embed)
@@ -148,10 +144,9 @@ def create_bot() -> commands.Bot:
     async def status_cmd(ctx):
         """Show current sync status with rich embed."""
         embed = discord.Embed(
-            title="📦 AquaFlora Stock Sync - Status",
+            title="📦 Legacy ERP Stock Sync - Status",
             color=COLOR_PRIMARY if state.sync_status == "Idle" else COLOR_WARNING
         )
-        embed.set_thumbnail(url=AQUAFLORA_LOGO)
         
         embed.add_field(
             name="🔄 Status",
@@ -215,7 +210,6 @@ def create_bot() -> commands.Bot:
             description="SKUs mapeados do WooCommerce para sincronização segura",
             color=COLOR_INFO
         )
-        embed.set_thumbnail(url=AQUAFLORA_LOGO)
         
         try:
             from src.database import ProductDatabase
@@ -279,7 +273,6 @@ def create_bot() -> commands.Bot:
                 description="Nenhuma alteração registrada ainda.\nExecute uma sincronização primeiro!",
                 color=COLOR_WARNING
             )
-            embed.set_thumbnail(url=AQUAFLORA_LOGO)
             await ctx.send(embed=embed)
             return
         
@@ -290,7 +283,6 @@ def create_bot() -> commands.Bot:
             description=f"Da sincronização de {last_stats.get('timestamp', 'N/A')[:16]}",
             color=COLOR_INFO
         )
-        embed.set_thumbnail(url=AQUAFLORA_LOGO)
         
         for change in changes:
             # Determine emoji
@@ -341,7 +333,6 @@ def create_bot() -> commands.Bot:
                 description="Nenhuma alteração registrada ainda.\nExecute uma sincronização primeiro!",
                 color=COLOR_WARNING
             )
-            embed.set_thumbnail(url=AQUAFLORA_LOGO)
             await ctx.send(embed=embed)
             return
         
@@ -364,7 +355,6 @@ def create_bot() -> commands.Bot:
             description=f"Da sincronização de {last_stats.get('timestamp', 'N/A')[:16]}",
             color=COLOR_INFO
         )
-        embed.set_thumbnail(url=AQUAFLORA_LOGO)
         
         # Top Increases
         if increases:
@@ -465,7 +455,6 @@ def create_bot() -> commands.Bot:
                 title="✅ Sync Concluído" if summary.success else "❌ Sync com Erros",
                 color=color
             )
-            embed.set_thumbnail(url=AQUAFLORA_LOGO)
             
             embed.add_field(name="📄 Parseados", value=str(summary.total_parsed), inline=True)
             embed.add_field(name="✨ Novos", value=str(summary.new_products), inline=True)
@@ -556,7 +545,7 @@ def main():
     
     bot = create_bot()
     
-    print("🤖 Iniciando AquaFlora Stock Bot 2.0...")
+    print("🤖 Iniciando ERP Stock Bot 2.0...")
     print("   Comandos: !ajuda, !status, !produtos, !precos, !whitelist")
     print("   Pressione Ctrl+C para parar")
     
