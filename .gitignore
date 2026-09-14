@@ -118,3 +118,4 @@ service-account*.json
 # Private operational exports; synthetic fixtures stay under tests/fixtures.
 /data/mercado_livre_*/
 /PORTFOLIO_REPORT.md
+/dashboard/logo.png
