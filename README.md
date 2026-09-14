@@ -1,269 +1,82 @@
-# AquaFlora Stock Sync
+# Legacy ERP Stock Sync
 
-Sincronizacao de estoque e preco do ERP Athos para WooCommerce.
+Integra exportações de um ERP legado ao WooCommerce, normalizando CSV e sincronizando preço e estoque de produtos existentes. Desenvolvido para resolver um problema real de operação de varejo: conectar um ERP sem uma API adequada a uma loja virtual.
 
-O uso operacional recomendado e o modo **LITE**. Ele atualiza somente SKU, preco e estoque, preservando nomes, descricoes, categorias, SEO, imagens e demais edicoes manuais feitas na loja.
+> Developed to solve a real production retail problem. A versão de portfólio preserva o código operacional e usa exemplos sintéticos; a execução nesta máquina não comprova o estado de uma instalação externa.
 
-## Fluxo Principal
+## Problema e solução
 
-1. O ERP Athos exporta um CSV para `C:\Estoque\Athos.csv`.
-2. O script le o CSV, limpa os dados e identifica SKU, preco e estoque.
-3. No modo LITE, o WooCommerce recebe apenas atualizacoes de preco e estoque para SKUs ja existentes.
-4. Ao final, o sistema grava logs, atualiza `last_run_stats.json` e envia notificacao ao Discord se `DISCORD_WEBHOOK_URL` estiver configurado.
+O ERP disponibilizava relatórios e CSVs, enquanto o e-commerce precisava de SKU, preço e saldo consistentes. Recriar todo o cadastro a cada exportação sobrescreveria descrições, imagens e trabalho editorial. O modo **LITE** usa uma whitelist local de SKUs e atualiza somente preço e estoque; hashes evitam escritas quando esses valores não mudaram.
 
-## Instalacao Local
+## Funcionalidades implementadas
 
-Abra o PowerShell na pasta do projeto. No Windows, use sempre o Python do
-ambiente virtual de forma explicita; nao dependa da ativacao do ambiente nem do
-comando global `python`.
+- Parser Athos para CSV delimitado por ponto e vírgula e relatórios CSV legados; rejeição de `.rpt` binário.
+- Normalização de números brasileiros, identificadores, nomes, marcas e unidades; aviso para SKUs potencialmente arredondados por planilhas.
+- Mapeamento de produtos existentes, whitelist e hashes em SQLite.
+- Sincronização LITE, exportação para revisão e `--dry-run`.
+- Modos FULL e LITE+IMG separados, com maior alcance de alteração.
+- Dashboard FastAPI/Jinja, curadoria de imagens, logs e notificações opcionais.
+- Scripts PowerShell para agendamento, lock de execução e diagnóstico.
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    ERP[ERP legado] --> CSV[Exportação CSV]
+    CSV --> Parser[Parser Athos]
+    Parser --> Normalizacao[Normalização e validação]
+    Normalizacao --> LITE[Sincronizador LITE]
+    SQLite[(SQLite: whitelist e hashes)] <--> LITE
+    LITE --> Woo[WooCommerce REST API]
+    Normalizacao --> Revisao[CSV para revisão]
+```
+
+Este repositório consome o CSV diretamente. A API de catálogo é um projeto separado: a cadeia `ERP → API → WooCommerce` não é uma dependência do LITE atual. Consulte [arquitetura e reutilização](docs/PORTFOLIO_ARCHITECTURE.md).
+
+## Stack
+
+Python, Pydantic/Pydantic Settings, SQLite, cliente WooCommerce, HTTPX/Requests, FastAPI, Jinja2, pytest e PowerShell. Docker Compose é uma alternativa de empacotamento; Redis não é requisito do fluxo implementado.
+
+## Instalação e desenvolvimento
 
 ```powershell
 py -m venv venv
-.\venv\Scripts\python.exe -m pip install --upgrade pip
-.\venv\Scripts\python.exe -m pip install -r .\requirements.txt
-copy .env.example .env
-notepad .env
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+.\venv\Scripts\python.exe -m pytest
 ```
 
-Confirme que o ambiente esta correto:
+Edite `.env` com a configuração de uma loja de testes. O exemplo começa com sincronização desligada e simulação ligada. Não há credenciais incluídas.
+
+| Configuração | Finalidade |
+| --- | --- |
+| `WOO_URL`, `WOO_CONSUMER_KEY`, `WOO_CONSUMER_SECRET` | Destino e autenticação WooCommerce |
+| `INPUT_DIR`, `OUTPUT_DIR`, `DB_PATH` | Arquivos locais e whitelist |
+| `SYNC_ENABLED`, `DRY_RUN` | Controle explícito de escrita |
+| `PRICE_GUARD_MAX_VARIATION`, `ZERO_GHOST_STOCK` | Proteções de sincronização; manter zeragem global desligada |
+| `APP_NAME`, `STORE_NAME` | Nome do sistema e loja nas superfícies configuráveis |
+| `DISCORD_WEBHOOK_URL`, `TELEGRAM_WEBHOOK_URL` | Notificações opcionais |
+| `DASHBOARD_AUTH_ENABLED`, `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD` | Acesso ao dashboard |
+
+O inventário completo está em [.env.example](.env.example) e [config/settings.py](config/settings.py). Instalações existentes mantêm seu `.env`; revise os valores antes de adotar esta versão.
+
+## Como funciona
+
+Primeiro valide uma fixture sintética, sem ler um export comercial:
 
 ```powershell
-Test-Path .\venv\Scripts\python.exe
-.\venv\Scripts\python.exe -c "import pydantic_settings; print('VENV OK')"
+.\venv\Scripts\python.exe scripts/profile_athos_export.py tests/fixtures/athos/athos-current-synthetic.csv --output data/output/profile.json
+.\venv\Scripts\python.exe main.py --input tests/fixtures/athos/athos-current-synthetic.csv --lite --dry-run
 ```
 
-Se aparecer `VENV OK`, os comandos operacionais podem ser executados. Se
-`Test-Path` retornar `False`, recrie o `venv` com os comandos acima.
+Para uma integração autorizada, `main.py --map-site` consulta a loja configurada e preenche a whitelist local. `--lite` passa a atualizar produtos existentes quando a configuração permite escrita. FULL pode recriar conteúdo; não é substituto do LITE para a rotina de saldo e preço. O `--dry-run` pode gerar arquivos locais, mas não deve publicar alterações.
 
-Variaveis essenciais no `.env`:
+## Segurança e operação
 
-```env
-WOO_URL=https://aquafloragroshop.com.br
-WOO_CONSUMER_KEY=ck_xxx
-WOO_CONSUMER_SECRET=cs_xxx
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-SYNC_ENABLED=true
-DRY_RUN=false
-ZERO_GHOST_STOCK=false
-```
+Exports, relatórios comerciais, imagens de clientes, `.env`, bancos e logs ficam fora do Git. Notificações podem conter dados de produtos; use canais autorizados. O dashboard tem ações operacionais: configure autenticação antes de disponibilizá-lo em uma rede.
 
-## Atualizar um PC Ja Instalado
+O agendador Windows é opcional e não é instalado pelo comando de testes. Scripts e nomes de tarefas legados são preservados para compatibilidade, conforme [limites da generalização](docs/PORTFOLIO_ARCHITECTURE.md). Runbooks antigos em `docs/` registram decisões históricas e precisam ser adaptados ao ambiente de destino.
 
-Depois de receber uma atualizacao do Git, atualize tambem as dependencias do
-`venv` antes de testar o sync:
+## Casos de uso e status
 
-```powershell
-git pull --ff-only
-.\venv\Scripts\python.exe -m pip install -r .\requirements.txt
-.\venv\Scripts\python.exe -m pip check
-```
-
-O `.env`, o `products.db`, os logs e os CSVs em `data/input` e `data/output`
-sao locais e nao sao substituidos pelo Git.
-
-### Perfil agregado seguro do Athos
-
-Para conferir um novo export sem publicar produtos, descricoes, identificadores,
-precos ou estoques individuais:
-
-```powershell
-.\venv\Scripts\python.exe .\scripts\profile_athos_export.py `
-    "C:\Estoque\Athos.csv" `
-    --output ".\data\output\athos-profile.json"
-```
-
-O JSON contem somente hash do arquivo, formato, contagens agregadas, unidades e
-estatisticas de identificadores/preco/estoque. Revise o arquivo antes de
-anexa-lo a uma issue. A fixture versionada em `tests/fixtures/athos` e
-completamente sintetica e nao contem linhas do cadastro real.
-
-## Comandos Seguros
-
-Mapear produtos existentes na loja antes da primeira sincronizacao:
-
-```powershell
-.\venv\Scripts\python.exe .\main.py --map-site
-```
-
-Esse comando consulta o WooCommerce e atualiza somente a whitelist local em
-`products.db`; ele nao altera produtos no site.
-
-Rodar uma simulacao sem publicar na loja:
-
-```powershell
-.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite --dry-run
-```
-
-Rodar a rotina real LITE:
-
-```powershell
-.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite
-```
-
-O comando real atualiza somente preco e estoque dos SKUs previamente mapeados.
-Ele nao cria produtos e nao altera nomes, descricoes, categorias ou imagens.
-
-Gerar CSV LITE para importacao manual no WooCommerce:
-
-```powershell
-.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite --dry-run
-```
-
-O arquivo gerado em `data/output/woocommerce_LITE_*.csv` contem somente:
-
-```csv
-SKU,Regular price,Stock
-```
-
-## Automacao no PC do Chefe
-
-O caminho recomendado e o Agendador de Tarefas do Windows.
-
-Instalar tarefa para rodar a cada 1 hora e tambem ao ligar o PC:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup
-```
-
-O Athos gera `C:\Estoque\Athos.csv` a cada 2 horas. A frequencia horaria do
-sincronizador reduz para menos de 1 hora o atraso entre um novo arquivo e a
-atualizacao no WooCommerce. Quando preco e estoque nao mudaram, os hashes em
-`products.db` fazem o LITE registrar `SKIP` e evitam uma escrita desnecessaria
-no WooCommerce.
-
-Testar a tarefa manualmente:
-
-```powershell
-Start-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
-```
-
-Verificar o historico:
-
-```powershell
-$task = Get-ScheduledTask -TaskName "AquaFlora Stock Sync LITE"
-$task | Select-Object TaskName, State
-$task | Get-ScheduledTaskInfo |
-    Format-List LastRunTime, LastTaskResult, NextRunTime, NumberOfMissedRuns
-$task.Actions | Format-List Execute, Arguments
-
-$log = Get-ChildItem .\logs\sync_lite_*.log |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-$log.FullName
-Get-Content $log.FullName -Tail 150
-```
-
-`LastTaskResult: 0` indica conclusao normal. O codigo decimal `267009`
-normalmente indica que a tarefa ainda esta executando. Para comprovar que o
-WooCommerce recebeu mudancas, procure no log por `Whitelist`, `Batch updated`,
-`Sync complete` e `AquaFlora LITE sync finished`.
-
-A notificacao verde do Discord significa que o processo terminou sem erro
-registrado, mas nao garante sozinha que houve alteracao. Confira o campo
-`Atualizados`: se ele for zero, consulte o log para distinguir "nenhuma mudanca
-necessaria" de produtos ignorados por falta de mapeamento.
-
-O script chamado pela tarefa e `scripts/run_sync_lite.ps1`. Ele:
-
-- usa `C:\Estoque\Athos.csv` por padrao;
-- falha sem publicar se esse arquivo nao existir;
-- prefere `venv\Scripts\python.exe` e so usa o Python global se o `venv` nao existir;
-- roda `main.py --map-site` uma vez por dia antes do sync;
-- roda `main.py --lite` para atualizar somente preco e estoque;
-- evita duas execucoes simultaneas com lock em `logs/sync_lite.lock`;
-- salva log diario em `logs/sync_lite_YYYYMMDD.log`.
-
-Para forcar o mapeamento em toda execucao, reinstale a tarefa com:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup -MapSiteEveryRun
-```
-
-Para desligar o mapeamento diario automatico:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install_windows_tasks.ps1 -AtStartup -NoMapSiteDaily
-```
-
-## Modos
-
-| Modo | Comando | Uso |
-| --- | --- | --- |
-| LITE | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite` | Rotina diaria: preco e estoque |
-| LITE dry-run | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite --dry-run` | Teste sem publicar |
-| FULL | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv"` | Recriacao completa de cadastro; usar com cuidado |
-| LITE+IMG | `.\venv\Scripts\python.exe .\main.py --input "C:\Estoque\Athos.csv" --lite-images` | Preco, estoque e imagens |
-
-## Estrutura
-
-```text
-main.py                    CLI principal
-src/parser.py              Parser do CSV Athos
-src/enricher.py            Normalizacao e enriquecimento
-src/sync.py                Envio para WooCommerce
-src/notifications.py       Webhook Discord/Telegram
-src/database.py            SQLite local e whitelist
-scripts/run_sync_lite.ps1  Execucao operacional LITE no Windows
-scripts/install_windows_tasks.ps1 Instalacao do agendamento Windows
-dashboard/                 Dashboard FastAPI
-tests/                     Testes automatizados
-docs/                      Documentacao
-```
-
-## Regras de Seguranca
-
-- Use sempre `.\venv\Scripts\python.exe`; `python main.py` pode chamar um
-  interpretador global sem as dependencias do projeto.
-- Use LITE para rotina automatica.
-- Rode `--map-site` antes da primeira sincronizacao real.
-- Deixe `ZERO_GHOST_STOCK=false` salvo no `.env`, salvo quando o CSV for comprovadamente o universo completo.
-- Nao use `--allow-create` na rotina automatica.
-- Nao publique FULL para rotina de preco/estoque.
-
-## Erro `No module named pydantic_settings`
-
-Esse erro indica que o comando usou um Python sem as dependencias do projeto.
-Nao corrija instalando pacotes aleatoriamente no Python global. Execute:
-
-```powershell
-Test-Path .\venv\Scripts\python.exe
-.\venv\Scripts\python.exe -m pip install -r .\requirements.txt
-.\venv\Scripts\python.exe -c "import pydantic_settings; print('VENV OK')"
-```
-
-Depois repita o comando desejado usando `.\venv\Scripts\python.exe`.
-
-## Recuperar Pais Despublicados
-
-Se uma execucao antiga zerou/despublicou SKUs pai `P-...`, simule a recuperacao:
-
-```powershell
-.\venv\Scripts\python.exe .\scripts\restore_parent_products.py
-```
-
-Se a lista estiver correta, publique esses pais novamente:
-
-```powershell
-.\venv\Scripts\python.exe .\scripts\restore_parent_products.py --execute
-```
-
-## Reconstruir Somente Produtos Diversos
-
-Quando pet, pesca e ração já estiverem corrigidos no site, use o reconciliador
-para recuperar do export antigo somente os demais produtos que ainda existem
-no Athos atual. O comando preserva nome, descrição, categorias, imagens e marca
-do WooCommerce antigo; atualiza preço e estoque pelo Athos; e deixa o `ID` vazio
-para o importador localizar cada produto pelo SKU.
-
-```powershell
-.\venv\Scripts\python.exe .\scripts\build_diversos_import.py `
-  --athos "C:\caminho\Athos.csv" `
-  --current-pet-fishing "C:\caminho\wc-export-pet-pesca-atual.csv" `
-  --legacy-all "C:\caminho\wc-export-antigo-completo.csv" `
-  --split-dir "data\output\diversos_por_departamento"
-```
-
-Com `--split-dir`, o script gera um CSV por departamento Athos e
-`99_todos_produtos_diversos.csv` com a união exata de todos eles. O script não
-publica no site. Produtos do export antigo ausentes no Athos atual ficam apenas
-no relatório e não são reimportados.
+Integração de varejistas com ERP sem API, atualização restrita de estoque/preço e preparação de importações revisáveis. O adapter implementado é Athos; outros layouts de ERP exigem adaptação e testes. Case de origem operacional real, em manutenção e preparação para portfólio. Não há métricas de impacto publicadas nesta auditoria.
