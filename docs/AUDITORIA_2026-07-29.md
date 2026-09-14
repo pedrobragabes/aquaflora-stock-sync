@@ -2,7 +2,7 @@
 
 ## Decisão
 
-O núcleo do AquaFlora Stock Sync deve ser **simplificado de forma incremental,
+O núcleo do Legacy ERP Stock Sync deve ser **simplificado de forma incremental,
 sem reescrita**. Parser, enriquecimento, modelos e modo LITE têm testes úteis e
 continuam sendo a rota operacional segura. O feature creep está concentrado nas
 ferramentas auxiliares de imagens, dashboard, bot, backup e geração editorial.

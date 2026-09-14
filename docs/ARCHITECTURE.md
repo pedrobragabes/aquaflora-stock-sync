@@ -1,4 +1,4 @@
-# 🏗️ Arquitetura do Sistema - AquaFlora Stock Sync v4.1
+# 🏗️ Arquitetura do Sistema - Legacy ERP Stock Sync v4.1
 
 > **Documentação técnica da arquitetura**
 > Última atualização: 27 Abril 2026

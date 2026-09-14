@@ -1,4 +1,4 @@
-# 📋 Contexto Técnico - AquaFlora Stock Sync v4.1
+# 📋 Contexto Técnico - Legacy ERP Stock Sync v4.1
 
 > **Documento de referência para desenvolvimento e manutenção**
 > Última atualização: 27 Abril 2026
@@ -7,7 +7,7 @@
 
 ## 🎯 Visão Geral
 
-**AquaFlora Stock Sync** é um sistema ETL que sincroniza dados do ERP Athos com o WooCommerce:
+**Legacy ERP Stock Sync** é um sistema ETL que sincroniza dados do ERP Athos com o WooCommerce:
 
 1. Importa CSV do ERP Athos (dados "sujos")
 2. Enriquece com marca, peso, SEO

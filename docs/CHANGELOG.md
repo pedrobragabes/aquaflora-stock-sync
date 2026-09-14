@@ -1,4 +1,4 @@
-# 📜 Changelog - AquaFlora Stock Sync
+# 📜 Changelog - Legacy ERP Stock Sync
 
 > **Histórico de versões e mudanças**
 > Formato: [Semantic Versioning](https://semver.org/)

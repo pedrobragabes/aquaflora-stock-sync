@@ -1,4 +1,4 @@
-# 🔧 Troubleshooting - AquaFlora Stock Sync v4.1
+# 🔧 Troubleshooting - Legacy ERP Stock Sync v4.1
 
 > **Guia de resolução de problemas comuns**
 > Última atualização: 27 Abril 2026

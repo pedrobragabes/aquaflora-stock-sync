@@ -18,7 +18,7 @@ notepad .env
 Configure no `.env`:
 
 ```env
-WOO_URL=https://aquafloragroshop.com.br
+WOO_URL=https://store.example.invalid
 WOO_CONSUMER_KEY=ck_xxx
 WOO_CONSUMER_SECRET=cs_xxx
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...

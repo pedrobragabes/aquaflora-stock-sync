@@ -1,4 +1,4 @@
-# 📚 Guia de Comandos - AquaFlora Stock Sync v4.0
+# 📚 Guia de Comandos - Legacy ERP Stock Sync v4.0
 
 > **Referência rápida de todos os comandos**
 > Última atualização: 16 Fevereiro 2026
