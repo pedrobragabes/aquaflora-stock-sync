@@ -114,3 +114,7 @@ service-account*.json
 # Linting/Type checking
 .mypy_cache/
 .ruff_cache/
+
+# Private operational exports; synthetic fixtures stay under tests/fixtures.
+/data/mercado_livre_*/
+/PORTFOLIO_REPORT.md
