@@ -179,7 +179,12 @@ def test_lite_batch_item_error_is_not_recorded_as_success(
     assert populated_database.exists_on_site("12345") is False
 
 
-def test_ghost_zeroing_skips_synthetic_parent_skus(temp_database):
+def test_ghost_zeroing_skips_synthetic_parent_skus(temp_database, sample_enriched_product):
+    temp_database.save_sync_result(
+        sample_enriched_product.sku, 1001,
+        sample_enriched_product.hash_full, sample_enriched_product.hash_fast,
+        float(sample_enriched_product.price),
+    )
     temp_database.save_sync_result("P-PET-BEBEDOURO-PAI", 2002, "x", "x", 100)
     temp_database.save_sync_result("SKU-GHOST", 2003, "x", "x", 100)
     fake_api = _FakeWooApi()
@@ -193,7 +198,7 @@ def test_ghost_zeroing_skips_synthetic_parent_skus(temp_database):
     syncer.wcapi = fake_api
 
     summary = syncer.sync_products(
-        [],
+        [sample_enriched_product],
         temp_database,
         zero_ghost_stock=True,
     )
@@ -210,3 +215,29 @@ def test_ghost_zeroing_skips_synthetic_parent_skus(temp_database):
             }
         ]
     }
+
+
+def test_empty_inventory_never_zeros_existing_stock(temp_database):
+    temp_database.save_sync_result("SKU-GHOST", 2003, "x", "x", 100)
+    fake_api = _FakeWooApi()
+    syncer = WooSyncManager(
+        woo_url="https://example.test", consumer_key="ck_test",
+        consumer_secret="cs_test", lite_mode=False, dry_run=False,
+    )
+    syncer.wcapi = fake_api
+    summary = syncer.sync_products([], temp_database, zero_ghost_stock=True)
+    assert summary.ghost_skus_zeroed == []
+    assert fake_api.posts == []
+
+
+def test_failed_sync_never_zeros_missing_stock(populated_database, sample_enriched_product):
+    populated_database.save_sync_result("SKU-GHOST", 2003, "x", "x", 100)
+    product = sample_enriched_product.model_copy(update={"price": Decimal("299.90"), "stock": 8})
+    syncer = WooSyncManager(
+        woo_url="https://example.test", consumer_key="ck_test",
+        consumer_secret="cs_test", lite_mode=False, dry_run=False,
+    )
+    syncer.wcapi = _FailedWooApi()
+    summary = syncer.sync_products([product], populated_database, zero_ghost_stock=True)
+    assert summary.success is False
+    assert summary.ghost_skus_zeroed == []

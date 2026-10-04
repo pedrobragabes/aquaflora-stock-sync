@@ -103,6 +103,10 @@ Rodar a rotina real LITE:
 O comando real atualiza somente preco e estoque dos SKUs previamente mapeados.
 Ele nao cria produtos e nao altera nomes, descricoes, categorias ou imagens.
 
+As barreiras da reconciliação FULL e os testes sintéticos estão documentados em
+[Segurança da reconciliação](docs/SEGURANCA-SYNC-2026-10-04.md). `ZERO_GHOST_STOCK`
+continua desativado por padrão; uma contagem semelhante não comprova export completo.
+
 Gerar CSV LITE para importacao manual no WooCommerce:
 
 ```powershell
