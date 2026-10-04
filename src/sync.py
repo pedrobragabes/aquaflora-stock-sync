@@ -200,6 +200,9 @@ class WooSyncManager:
             self._batch_fast_updates(fast_updates, db, summary)
         
         # Handle ghost SKUs
+        if zero_ghost_stock and (not products or summary.errors):
+            logger.warning("ZERO_GHOST_STOCK ignored for an empty inventory or failed sync")
+            zero_ghost_stock = False
         if zero_ghost_stock:
             if self.lite_mode:
                 logger.warning(

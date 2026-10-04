@@ -82,6 +82,27 @@ def setup_logging(log_level: str = "INFO", log_dir: Path = Path("./logs")):
     return logger
 
 
+def should_zero_ghost_stock(
+    *, requested: bool, teste_mode: bool, product_count: int,
+    mapped_site_products: int, filtered_out_count: int = 0,
+    enrichment_error_count: int = 0,
+) -> bool:
+    """Refuse ghost zeroing for known partial or failed inventory processing.
+
+    The 90% count guard is only a circuit breaker, not proof of completeness.
+    Operators still need to confirm a complete export before requesting zeroing.
+    """
+    return (
+        requested
+        and not teste_mode
+        and product_count > 0
+        and mapped_site_products > 0
+        and filtered_out_count == 0
+        and enrichment_error_count == 0
+        and product_count * 10 >= mapped_site_products * 9
+    )
+
+
 def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = False, lite_images_mode: bool = False, allow_create: bool = False, teste_mode: bool = False) -> SyncSummary:
     """
     Process a single input file.
@@ -131,6 +152,7 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
         return SyncSummary(total_parsed=0, success=False, errors=["No products in file"])
     
     # 1.5. Filter excluded products (departments, keywords, weight)
+    original_product_count = len(raw_products)
     exclusion_config = _load_exclusion_config()
     raw_products, exclusion_stats = _filter_excluded_products(raw_products, exclusion_config)
     
@@ -210,10 +232,20 @@ def process_file(input_file: Path, dry_run: bool = False, lite_mode: bool = Fals
             allow_create=allow_create,
         )
         
+        zero_ghost_stock = should_zero_ghost_stock(
+            requested=settings.zero_ghost_stock,
+            teste_mode=teste_mode,
+            product_count=len(enriched_products),
+            mapped_site_products=site_products,
+            filtered_out_count=original_product_count - len(raw_products),
+            enrichment_error_count=len(raw_products) - len(enriched_products),
+        )
+        if settings.zero_ghost_stock and not zero_ghost_stock:
+            logger.warning("ZERO_GHOST_STOCK disabled: inventory is partial, filtered, failed or unmapped")
         summary = syncer.sync_products(
             enriched_products,
             db,
-            zero_ghost_stock=settings.zero_ghost_stock,
+            zero_ghost_stock=zero_ghost_stock,
         )
     else:
         if not settings.woo_configured:
